@@ -417,6 +417,27 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
 
+
+            gl.useProgram(mainProgram);
+            gl.uniform3fv(eyePositionLocation, eyePosition);
+            gl.uniform2fv(resolutionLocation, resolution);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, positionTarget);
+            gl.uniform1i(positionBufferLocation, 0);
+
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, normalTarget);
+            gl.uniform1i(normalBufferLocation, 1);
+
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, uvTarget);
+            gl.uniform1i(uVBufferLocation, 2);
+
+            gl.activeTexture(gl.TEXTURE3);
+            gl.bindTexture(gl.TEXTURE_2D, colorTexture);
+            gl.uniform1i(textureMapLocation, 3);
+
             function draw() {
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
@@ -445,25 +466,6 @@
                 gl.bindVertexArray(sphereVertexArray);
                 gl.depthMask(false);
                 gl.enable(gl.BLEND);
-
-                gl.uniform3fv(eyePositionLocation, eyePosition);
-                gl.uniform2fv(resolutionLocation, resolution);
-
-                gl.activeTexture(gl.TEXTURE0);
-                gl.bindTexture(gl.TEXTURE_2D, positionTarget);
-                gl.uniform1i(positionBufferLocation, 0);
-
-                gl.activeTexture(gl.TEXTURE1);
-                gl.bindTexture(gl.TEXTURE_2D, normalTarget);
-                gl.uniform1i(normalBufferLocation, 1);
-
-                gl.activeTexture(gl.TEXTURE2);
-                gl.bindTexture(gl.TEXTURE_2D, uvTarget);
-                gl.uniform1i(uVBufferLocation, 2);
-
-                gl.activeTexture(gl.TEXTURE3);
-                gl.bindTexture(gl.TEXTURE_2D, colorTexture);
-                gl.uniform1i(textureMapLocation, 3);
 
 
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
