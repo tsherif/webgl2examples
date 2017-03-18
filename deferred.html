@@ -23,7 +23,7 @@
 -->
 <html>
 <head>
-    <title>PicoGL.js: Deferred Rendering</title>
+    <title>WebGL 2 Example: Deferred Rendering</title>
     <script src="gl-matrix.js"></script>
     <script src="utils.js"></script>
 </head>
@@ -129,8 +129,13 @@
         gl.blendFunc(gl.ONE, gl.ONE);
 
         if (!gl.getExtension("EXT_color_buffer_float")) {
-            console.error("FLOAT color buffer not available")
+            console.error("FLOAT color buffer not available");
+            document.body.innerHTML = "This example requires EXT_color_buffer_float which is unavailable on this system."
         }
+
+        ////////////////////////////
+        // GBUFFER SETUP
+        ////////////////////////////
 
         // Set up gbuffer program
         var geoVsSource =  document.getElementById("geo-vs").text.trim();
@@ -173,11 +178,11 @@
             console.error(gl.getProgramInfoLog(geoProgram));
         }
 
+        // Get uniform locations
         var mvpMatrixLocation = gl.getUniformLocation(geoProgram, "uMVP");
         var modelMatrixLocation = gl.getUniformLocation(geoProgram, "uModelMatrix");
 
         // Set up gBuffer
-
         var gBuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
 
@@ -221,11 +226,12 @@
             gl.COLOR_ATTACHMENT2
         ]);
 
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-            console.log("Frame buffer error: " + gl.checkFramebufferStatus(gl.FRAMEBUFFER).toString());
-        }
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        /////////////////////////////
+        // MAIN PROGRAM SETUP
+        /////////////////////////////
 
         // Set up main program
         var mainVsSource =  document.getElementById("main-vs").text.trim();
@@ -268,6 +274,7 @@
             console.error(gl.getProgramInfoLog(mainProgram));
         }
 
+        // Get uniform locations
         var lightMVPMatrixLocation = gl.getUniformLocation(mainProgram, "uMVP");
         var eyePositionLocation = gl.getUniformLocation(mainProgram, "uEyePosition");
         var lightPositionLocation = gl.getUniformLocation(mainProgram, "uLightPosition");
@@ -278,7 +285,9 @@
         var uVBufferLocation = gl.getUniformLocation(mainProgram, "uUVBuffer");
         var textureMapLocation = gl.getUniformLocation(mainProgram, "uTextureMap");
 
-        // Geometry
+        ///////////////////////
+        // GEOMETRY SET UP
+        ///////////////////////
 
         var cubeVertexArray = gl.createVertexArray();
         gl.bindVertexArray(cubeVertexArray);
@@ -324,7 +333,11 @@
 
         gl.bindVertexArray(null);
 
-        // Camera stuff
+        
+        ////////////////////
+        // OTHER DATA
+        ////////////////////
+
         var projMatrix = mat4.create();
         mat4.perspective(projMatrix, Math.PI / 2, canvas.width / canvas.height, 0.1, 10.0);
 
@@ -335,12 +348,58 @@
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
+        var boxes = [
+            {
+                scale: [1, 1, 1],
+                rotate: [0, 0, 0],
+                translate: [0, 0, 0],
+                modelMatrix: mat4.create(),
+                mvpMatrix: mat4.create(),
+            },
+            {
+                scale: [0.1, 0.1, 0.1],
+                rotate: [0, 0, Math.PI / 3],
+                translate: [0.8, 0.8, 0.4],
+                modelMatrix: mat4.create(),
+                mvpMatrix: mat4.create(),
+            }
+        ];
+
+
+        var lights = [
+            {
+                position: vec3.fromValues(0, 1, 0.5),
+                color:    vec3.fromValues(0.8, 0.0, 0.0),
+                mvpMatrix: mat4.create()
+            },
+            {
+                position: vec3.fromValues(1, 1, 0.5),
+                color:    vec3.fromValues(0.0, 0.0, 0.8),
+                mvpMatrix: mat4.create()
+            },
+            {
+                position: vec3.fromValues(1, 0, 0.5),
+                color:    vec3.fromValues(0.0, 0.8, 0.0),
+                mvpMatrix: mat4.create()
+            },
+            {
+                position: vec3.fromValues(0.5, 0, 1),
+                color:    vec3.fromValues(0.0, 0.8, 0.8),
+                mvpMatrix: mat4.create()
+            }
+        ];
+            
+        for (var i = 0, len = lights.length; i < len; ++i) {
+            utils.xformMatrix(lights[i].mvpMatrix, lights[i].position);
+            mat4.multiply(lights[i].mvpMatrix, viewProjMatrix, lights[i].mvpMatrix);
+        }
+
         var image = new Image();
-
+        
         image.onload = function() {
-            var texture = gl.createTexture();
+            var colorTexture = gl.createTexture();
 
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.bindTexture(gl.TEXTURE_2D, colorTexture);
 
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -349,57 +408,6 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
-
-            var boxes = [
-                {
-                    scale: [1, 1, 1],
-                    rotate: [0, 0, 0],
-                    translate: [0, 0, 0],
-                    modelMatrix: mat4.create(),
-                    mvpMatrix: mat4.create(),
-                    drawCall: null
-                },
-                {
-                    scale: [0.1, 0.1, 0.1],
-                    rotate: [0, 0, Math.PI / 3],
-                    translate: [0.8, 0.8, 0.4],
-                    modelMatrix: mat4.create(),
-                    mvpMatrix: mat4.create(),
-                    drawCall: null
-                }
-            ];
-
-
-            var lights = [
-                {
-                    position: vec3.fromValues(0, 1, 0.5),
-                    color:    vec3.fromValues(0.8, 0.0, 0.0),
-                    mvpMatrix: mat4.create()
-                },
-                {
-                    position: vec3.fromValues(1, 1, 0.5),
-                    color:    vec3.fromValues(0.0, 0.0, 0.8),
-                    mvpMatrix: mat4.create()
-                },
-                {
-                    position: vec3.fromValues(1, 0, 0.5),
-                    color:    vec3.fromValues(0.0, 0.8, 0.0),
-                    mvpMatrix: mat4.create()
-                },
-                {
-                    position: vec3.fromValues(0.5, 0, 1),
-                    color:    vec3.fromValues(0.0, 0.8, 0.8),
-                    mvpMatrix: mat4.create()
-                }
-            ];
-                
-            var lightMatrix;
-            var lightDrawCalls = new Array(lights.length);
-
-            for (var i = 0, len = lights.length; i < len; ++i) {
-                utils.xformMatrix(lights[i].mvpMatrix, lights[i].position);
-                mat4.multiply(lights[i].mvpMatrix, viewProjMatrix, lights[i].mvpMatrix);
-            }
 
             function draw() {
 
@@ -446,7 +454,7 @@
                 gl.uniform1i(uVBufferLocation, 2);
 
                 gl.activeTexture(gl.TEXTURE3);
-                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.bindTexture(gl.TEXTURE_2D, colorTexture);
                 gl.uniform1i(textureMapLocation, 3);
 
 
