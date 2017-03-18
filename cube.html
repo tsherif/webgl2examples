@@ -23,6 +23,7 @@
 -->
 <html>
 <head>
+    <title>WebGL 2 Example: Phong Cube</title>
     <script src="gl-matrix.js"></script>
     <script src="utils.js"></script>
 </head>
@@ -84,6 +85,10 @@
         gl.clearColor(0.0, 0.0, 0.0, 1.0)
         gl.enable(gl.DEPTH_TEST);
 
+        /////////////////////
+        // SET UP PROGRAM
+        /////////////////////
+
         var vsSource =  document.getElementById("vertex-draw").text.trim();
         var fsSource =  document.getElementById("fragment-draw").text.trim();
 
@@ -123,6 +128,11 @@
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             console.error(gl.getProgramInfoLog(program));
         }
+
+        /////////////////////
+        // GET
+        /////////////////////
+
         var viewProjLocation = gl.getUniformLocation(program, "uViewProj");
         var modelLocation = gl.getUniformLocation(program, "uModel");
         var eyePositionLocation = gl.getUniformLocation(program, "eyePosition");
@@ -130,6 +140,11 @@
         var texLocation = gl.getUniformLocation(program, "tex");
 
         gl.useProgram(program);
+
+
+        /////////////////////
+        // SET UP GEOMETRY
+        /////////////////////
 
         var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
         var numVertices = box.positions.length / 3;
@@ -145,7 +160,7 @@
 
         var uvBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.texture_coords, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
         gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(1);
 
@@ -155,6 +170,10 @@
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
+        //////////////////////////
+        // OTHER DATA
+        //////////////////////////
+        
         var projMatrix = mat4.create();
         mat4.perspective(projMatrix, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
