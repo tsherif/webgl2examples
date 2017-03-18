@@ -93,6 +93,11 @@
         canvas.height = window.innerHeight;
         
         var gl = canvas.getContext("webgl2");
+        if (!gl) {
+            console.error("WebGL 2 not available");
+            document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
+        }
+        
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clearColor(0.0, 0.0, 0.0, 1.0)
         gl.enable(gl.DEPTH_TEST);
