@@ -38,30 +38,34 @@
         layout(location=1) in vec2 uv;
         layout(location=2) in vec4 normal;
         
-        uniform Xforms {
-            mat4 model;
+        uniform SceneUniforms {
             mat4 viewProj;
-        } uXforms;       
+            vec4 eyePosition;
+            vec4 lightPosition;
+        } uScene;       
         
+        uniform mat4 uModel;
+
         out  vec3 vPosition;
         out  vec2 vUV;
         out  vec3 vNormal;
         void main() {
-            vec4 worldPosition = uXforms.model * position;
+            vec4 worldPosition = uModel * position;
             vPosition = worldPosition.xyz;
             vUV = uv;
-            vNormal = (uXforms.model * normal).xyz;
-            gl_Position = uXforms.viewProj * worldPosition;
+            vNormal = (uModel * normal).xyz;
+            gl_Position = uScene.viewProj * worldPosition;
         }
     </script>
     <script type="x-shader/vf" id="fragment-draw">
         #version 300 es
         precision highp float;
 
-        uniform Lighting {
+        uniform SceneUniforms {
+            mat4 viewProj;
             vec4 eyePosition;
             vec4 lightPosition;
-        };
+        } uScene;
 
         uniform sampler2D tex;
         
@@ -74,8 +78,8 @@
             vec3 color = texture(tex, vUV).rgb;
 
             vec3 normal = normalize(vNormal);
-            vec3 eyeVec = normalize(eyePosition.xyz - vPosition);
-            vec3 incidentVec = normalize(vPosition - lightPosition.xyz);
+            vec3 eyeVec = normalize(uScene.eyePosition.xyz - vPosition);
+            vec3 incidentVec = normalize(vPosition - uScene.lightPosition.xyz);
             vec3 lightVec = -incidentVec;
             float diffuse = max(dot(lightVec, normal), 0.0);
             float highlight = pow(max(dot(eyeVec, reflect(incidentVec, normal)), 0.0), 100.0);
@@ -141,12 +145,10 @@
         // GET UNIFORM LOCATIONS
         /////////////////////////
 
-        var xformBufferLocation = gl.getUniformBlockIndex(program, "Xforms");
-        gl.uniformBlockBinding(program, xformBufferLocation, 0);
+        var sceneUniformsLocation = gl.getUniformBlockIndex(program, "SceneUniforms");
+        gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
 
-        var lightingBufferLocation = gl.getUniformBlockIndex(program, "Lighting");
-        gl.uniformBlockBinding(program, lightingBufferLocation, 1);
-
+        var modelMatrixLocation = gl.getUniformLocation(program, "uModel");
         var texLocation = gl.getUniformLocation(program, "tex");
 
         gl.useProgram(program);
@@ -218,22 +220,15 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
 
-            var matrixData = new Float32Array(32);
-            matrixData.set(viewProjMatrix, 16);
+            var sceneUniformData = new Float32Array(24);
+            sceneUniformData.set(viewProjMatrix);
+            sceneUniformData.set(eyePosition, 16);
+            sceneUniformData.set(lightPosition, 20);
 
-            var xformBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.UNIFORM_BUFFER, xformBuffer);
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, xformBuffer);
-            gl.bufferData(gl.UNIFORM_BUFFER, matrixData, gl.DYNAMIC_DRAW);
-
-            var lightingData = new Float32Array(8);
-            lightingData.set(eyePosition);
-            lightingData.set(lightPosition, 4);
-
-            var lightingBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.UNIFORM_BUFFER, lightingBuffer);
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, lightingBuffer);
-            gl.bufferData(gl.UNIFORM_BUFFER, lightingData, gl.DYNAMIC_DRAW);
+            var sceneUniformBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+            gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
             gl.uniform1i(texLocation, 0);
 
@@ -244,11 +239,8 @@
                 mat4.fromXRotation(rotateXMatrix, angleX);
                 mat4.fromYRotation(rotateYMatrix, angleY);
                 mat4.multiply(modelMatrix, rotateXMatrix, rotateYMatrix);
-                matrixData.set(modelMatrix);
 
-                gl.bindBuffer(gl.UNIFORM_BUFFER, xformBuffer)
-                gl.bufferSubData(gl.UNIFORM_BUFFER, 0, matrixData);
-                gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+                gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
 
                 gl.clear(gl.COLOR_BUFFER_BIT);
                 gl.drawArrays(gl.TRIANGLES, 0, numVertices);
