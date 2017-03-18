@@ -32,13 +32,17 @@
     <script id="geo-vs" type="x-vertex-shader">
         #version 300 es
 
+        layout(std140, column_major) uniform;
+
         layout(location=0) in vec4 aPosition;
         layout(location=1) in vec3 aNormal;
         layout(location=2) in vec4 aUV;
 
-        uniform mat4 uMVP;
-        uniform mat4 uModelMatrix;
-
+        uniform Matrices {
+            mat4 uModelMatrix;
+            mat4 uMVP;
+        };
+        
         out vec4 vPosition;
         out vec4 vNormal;
         out vec4 vUV;
@@ -188,8 +192,9 @@
         }
 
         // Get uniform locations
-        var mvpMatrixLocation = gl.getUniformLocation(geoProgram, "uMVP");
-        var modelMatrixLocation = gl.getUniformLocation(geoProgram, "uModelMatrix");
+        var matrixUniformLocation = gl.getUniformBlockIndex(geoProgram, "Matrices");
+        gl.uniformBlockBinding(geoProgram, matrixUniformLocation, 0);
+
 
         // Set up gBuffer
         var gBuffer = gl.createFramebuffer();
@@ -382,6 +387,10 @@
             }
         ];
 
+        var matrixUniformData = new Float32Array(32);
+        var matrixUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, matrixUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, 128, gl.DYNAMIC_DRAW);
 
         var lights = [
             {
@@ -475,8 +484,12 @@
                     utils.xformMatrix(boxes[i].modelMatrix, boxes[i].translate, boxes[i].rotate, boxes[i].scale);
                     mat4.multiply(boxes[i].mvpMatrix, viewProjMatrix, boxes[i].modelMatrix);
                 
-                    gl.uniformMatrix4fv(mvpMatrixLocation, false, boxes[i].mvpMatrix);
-                    gl.uniformMatrix4fv(modelMatrixLocation, false, boxes[i].modelMatrix);
+                    matrixUniformData.set(boxes[i].modelMatrix);
+                    matrixUniformData.set(boxes[i].mvpMatrix, 16);
+
+                    gl.bindBuffer(gl.UNIFORM_BUFFER, matrixUniformBuffer);
+                    gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, matrixUniformBuffer);
+                    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, matrixUniformData);
 
                     gl.drawArrays(gl.TRIANGLES, 0, numCubeVertices);
                 }
