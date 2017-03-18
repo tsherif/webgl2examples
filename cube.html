@@ -202,6 +202,16 @@
         var rotateXMatrix = mat4.create();
         var rotateYMatrix = mat4.create();
 
+        var sceneUniformData = new Float32Array(24);
+        sceneUniformData.set(viewProjMatrix);
+        sceneUniformData.set(eyePosition, 16);
+        sceneUniformData.set(lightPosition, 20);
+
+        var sceneUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
         var angleX = 0;
         var angleY = 0;
 
@@ -219,16 +229,6 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
-
-            var sceneUniformData = new Float32Array(24);
-            sceneUniformData.set(viewProjMatrix);
-            sceneUniformData.set(eyePosition, 16);
-            sceneUniformData.set(lightPosition, 20);
-
-            var sceneUniformBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
-            gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
             gl.uniform1i(texLocation, 0);
 

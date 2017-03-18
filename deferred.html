@@ -71,22 +71,32 @@
     <script id="main-vs" type="x-vertex-shader">
         #version 300 es
 
+        layout(std140, column_major) uniform;
+
         layout(location=0) in vec4 aPosition;
         
-        uniform mat4 uMVP;
+        uniform LightUniforms {
+            mat4 mvp;
+            vec4 position;
+            vec4 color;
+        } uLight; 
 
         void main() {
-            gl_Position = uMVP * aPosition;
+            gl_Position = uLight.mvp * aPosition;
         }
     </script>
     <script id="main-fs" type="x-fragment-shader">
         #version 300 es
         precision highp float;
 
+        uniform LightUniforms {
+            mat4 mvp;
+            vec4 position;
+            vec4 color;
+        } uLight; 
+
         uniform vec2 uResolution;
-        uniform vec3 uLightPosition;
         uniform vec3 uEyePosition;
-        uniform vec3 uLightColor;
         uniform sampler2D uPositionBuffer;
         uniform sampler2D uNormalBuffer;
         uniform sampler2D uUVBuffer;
@@ -102,16 +112,15 @@
 
             vec4 baseColor = texture(uTextureMap, uv);
 
-
             vec3 eyeDirection = normalize(uEyePosition - position);
-            vec3 lightVec = uLightPosition - position;
+            vec3 lightVec = uLight.position.xyz - position;
             float attenuation = 1.0 - length(lightVec);
             vec3 lightDirection = normalize(lightVec);
             vec3 reflectionDirection = reflect(-lightDirection, normal);
             float nDotL = max(dot(lightDirection, normal), 0.0);
-            vec3 diffuse = nDotL * uLightColor;
+            vec3 diffuse = nDotL * uLight.color.rgb;
             float ambient = 0.1;
-            vec3 specular = pow(max(dot(reflectionDirection, eyeDirection), 0.0), 20.0) * uLightColor;
+            vec3 specular = pow(max(dot(reflectionDirection, eyeDirection), 0.0), 20.0) * uLight.color.rgb;
 
             fragColor = vec4(attenuation * (ambient + diffuse + specular) * baseColor.rgb, baseColor.a);
         }
@@ -283,10 +292,10 @@
         }
 
         // Get uniform locations
-        var lightMVPMatrixLocation = gl.getUniformLocation(mainProgram, "uMVP");
+        var lightUniformsLocation = gl.getUniformBlockIndex(mainProgram, "LightUniforms");
+        gl.uniformBlockBinding(mainProgram, lightUniformsLocation, 0);
+
         var eyePositionLocation = gl.getUniformLocation(mainProgram, "uEyePosition");
-        var lightPositionLocation = gl.getUniformLocation(mainProgram, "uLightPosition");
-        var lightColorLocation = gl.getUniformLocation(mainProgram, "uLightColor");
         var resolutionLocation = gl.getUniformLocation(mainProgram, "uResolution");
         var positionBufferLocation = gl.getUniformLocation(mainProgram, "uPositionBuffer");
         var normalBufferLocation = gl.getUniformLocation(mainProgram, "uNormalBuffer");
@@ -378,28 +387,39 @@
             {
                 position: vec3.fromValues(0, 1, 0.5),
                 color:    vec3.fromValues(0.8, 0.0, 0.0),
-                mvpMatrix: mat4.create()
+                uniformData: new Float32Array(24),
+                uniformBuffer: gl.createBuffer()
             },
             {
                 position: vec3.fromValues(1, 1, 0.5),
                 color:    vec3.fromValues(0.0, 0.0, 0.8),
-                mvpMatrix: mat4.create()
+                uniformData: new Float32Array(24),
+                uniformBuffer: gl.createBuffer()
             },
             {
                 position: vec3.fromValues(1, 0, 0.5),
                 color:    vec3.fromValues(0.0, 0.8, 0.0),
-                mvpMatrix: mat4.create()
+                uniformData: new Float32Array(24),
+                uniformBuffer: gl.createBuffer()
             },
             {
                 position: vec3.fromValues(0.5, 0, 1),
                 color:    vec3.fromValues(0.0, 0.8, 0.8),
-                mvpMatrix: mat4.create()
+                uniformData: new Float32Array(24),
+                uniformBuffer: gl.createBuffer()
             }
         ];
-            
+        
+        var mvpMatrix = mat4.create();
         for (var i = 0, len = lights.length; i < len; ++i) {
-            utils.xformMatrix(lights[i].mvpMatrix, lights[i].position);
-            mat4.multiply(lights[i].mvpMatrix, viewProjMatrix, lights[i].mvpMatrix);
+            utils.xformMatrix(mvpMatrix, lights[i].position);
+            mat4.multiply(mvpMatrix, viewProjMatrix, mvpMatrix);
+            lights[i].uniformData.set(mvpMatrix);
+            lights[i].uniformData.set(lights[i].position, 16);
+            lights[i].uniformData.set(lights[i].color, 20);
+
+            gl.bindBuffer(gl.UNIFORM_BUFFER, lights[i].uniformBuffer);
+            gl.bufferData(gl.UNIFORM_BUFFER, lights[i].uniformData, gl.STATIC_DRAW);
         }
 
         var image = new Image();
@@ -471,10 +491,8 @@
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (var i = 0, len = lights.length; i < len; ++i) {
-                    gl.uniformMatrix4fv(lightMVPMatrixLocation, false, lights[i].mvpMatrix);
-                    gl.uniform3fv(lightPositionLocation, lights[i].position)
-                    gl.uniform3fv(lightColorLocation, lights[i].color)
-
+                    gl.bindBuffer(gl.UNIFORM_BUFFER, lights[i].uniformBuffer);
+                    gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, lights[i].uniformBuffer);
                     gl.drawElements(gl.TRIANGLES, numSphereElements, gl.UNSIGNED_SHORT, 0);
                 }               
                 
