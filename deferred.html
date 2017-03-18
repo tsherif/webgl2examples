@@ -99,8 +99,11 @@
             vec4 color;
         } uLight; 
 
-        uniform vec2 uResolution;
-        uniform vec3 uEyePosition;
+        uniform SceneUniforms {
+            vec4 uEyePosition;
+            vec2 uResolution;
+        };
+
         uniform sampler2D uPositionBuffer;
         uniform sampler2D uNormalBuffer;
         uniform sampler2D uUVBuffer;
@@ -116,7 +119,7 @@
 
             vec4 baseColor = texture(uTextureMap, uv);
 
-            vec3 eyeDirection = normalize(uEyePosition - position);
+            vec3 eyeDirection = normalize(uEyePosition.xyz - position);
             vec3 lightVec = uLight.position.xyz - position;
             float attenuation = 1.0 - length(lightVec);
             vec3 lightDirection = normalize(lightVec);
@@ -300,8 +303,9 @@
         var lightUniformsLocation = gl.getUniformBlockIndex(mainProgram, "LightUniforms");
         gl.uniformBlockBinding(mainProgram, lightUniformsLocation, 0);
 
-        var eyePositionLocation = gl.getUniformLocation(mainProgram, "uEyePosition");
-        var resolutionLocation = gl.getUniformLocation(mainProgram, "uResolution");
+        var sceneUniformsLocation = gl.getUniformBlockIndex(mainProgram, "SceneUniforms");
+        gl.uniformBlockBinding(mainProgram, sceneUniformsLocation, 1);
+
         var positionBufferLocation = gl.getUniformLocation(mainProgram, "uPositionBuffer");
         var normalBufferLocation = gl.getUniformLocation(mainProgram, "uNormalBuffer");
         var uVBufferLocation = gl.getUniformLocation(mainProgram, "uUVBuffer");
@@ -357,7 +361,7 @@
 
         
         ////////////////////
-        // OTHER DATA
+        // UNIFORM DATA
         ////////////////////
 
         var projMatrix = mat4.create();
@@ -369,6 +373,13 @@
 
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
+
+        var sceneUniformData = new Float32Array(8);
+        sceneUniformData.set(eyePosition);
+        sceneUniformData.set(resolution, 4);
+        var sceneUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
         var boxes = [
             {
@@ -448,8 +459,8 @@
 
 
             gl.useProgram(mainProgram);
-            gl.uniform3fv(eyePositionLocation, eyePosition);
-            gl.uniform2fv(resolutionLocation, resolution);
+            gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, sceneUniformBuffer);
 
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, positionTarget);
