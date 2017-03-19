@@ -106,10 +106,7 @@
             vec4 color;
         } uLight; 
 
-        uniform SceneUniforms {
-            vec4 uEyePosition;
-            vec2 uResolution;
-        };
+        uniform vec3 uEyePosition;
 
         uniform sampler2D uPositionBuffer;
         uniform sampler2D uNormalBuffer;
@@ -126,7 +123,7 @@
 
             vec4 baseColor = texture(uTextureMap, uv);
 
-            vec3 eyeDirection = normalize(uEyePosition.xyz - position);
+            vec3 eyeDirection = normalize(uEyePosition - position);
             vec3 lightVec = uLight.position.xyz - position;
             float attenuation = 1.0 - length(lightVec);
             vec3 lightDirection = normalize(lightVec);
@@ -143,7 +140,6 @@
         var canvas = document.getElementById("gl-canvas");
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        var resolution = vec2.fromValues(canvas.width, canvas.height);
 
         var gl = canvas.getContext("webgl2");
         if (!gl) {
@@ -298,8 +294,7 @@
         var lightUniformsLocation = gl.getUniformBlockIndex(mainProgram, "LightUniforms");
         gl.uniformBlockBinding(mainProgram, lightUniformsLocation, 0);
 
-        var sceneUniformsLocation = gl.getUniformBlockIndex(mainProgram, "SceneUniforms");
-        gl.uniformBlockBinding(mainProgram, sceneUniformsLocation, 1);
+        var eyePositionLocation = gl.getUniformLocation(mainProgram, "uEyePosition");
 
         var positionBufferLocation = gl.getUniformLocation(mainProgram, "uPositionBuffer");
         var normalBufferLocation = gl.getUniformLocation(mainProgram, "uNormalBuffer");
@@ -369,13 +364,7 @@
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-        var sceneUniformData = new Float32Array(8);
-        sceneUniformData.set(eyePosition);
-        sceneUniformData.set(resolution, 4);
-        var sceneUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
-        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, sceneUniformBuffer);
-        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);        
+          
 
         var boxes = [
             {
@@ -468,11 +457,12 @@
             gl.activeTexture(gl.TEXTURE3);
             gl.bindTexture(gl.TEXTURE_2D, colorTexture);
 
-            //////////////////////////////////
-            // SET UP MAIN PROGRAM SAMPLERS
-            //////////////////////////////////
+            //////////////////////////////
+            // SET MAIN PROGRAM UNIFORMS
+            //////////////////////////////
             
             gl.useProgram(mainProgram);
+            gl.uniform3fv(eyePositionLocation, eyePosition);
             gl.uniform1i(positionBufferLocation, 0);
             gl.uniform1i(normalBufferLocation, 1);
             gl.uniform1i(uVBufferLocation, 2);
@@ -509,8 +499,6 @@
                     gl.drawArrays(gl.TRIANGLES, 0, numCubeVertices);
                 }
 
-                gl.bindBuffer(gl.UNIFORM_BUFFER, null);               
-
                 /////////////////////////
                 // MAIN DRAW PASS
                 /////////////////////////
@@ -530,8 +518,6 @@
                     gl.drawElements(gl.TRIANGLES, numSphereElements, gl.UNSIGNED_SHORT, 0);
                 }
 
-                gl.bindBuffer(gl.UNIFORM_BUFFER, null);               
-                
                 requestAnimationFrame(draw);
             }
 
