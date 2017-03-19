@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<!--
+  The MIT License (MIT)
+
+  Copyright (c) 2017 Tarek Sherif
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html>
+<head>
+    <title>WebGL 2 Example: Particles</title>
+    <script src="utils/gl-matrix.js"></script>
+    <link rel="stylesheet" href="css/webgl2examples.css"> 
+</head>
+<body>
+    <div id="example-title">
+        WebGL 2 Example: Particles
+        <div>
+            <a href="https://github.com/tsherif/webgl2examples/blob/master/particles.html">Source code</a>
+        </div>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+    <script id="update-vs" type="x-shader/vs">
+        #version 300 es
+
+        layout(location=0) in vec3 aPosition;
+        layout(location=1) in vec3 aVelocity;
+
+        uniform vec3 mass1Position;
+        uniform float mass1Factor;
+        uniform vec3 mass2Position;
+        uniform float mass2Factor;
+        uniform vec3 mass3Position;
+        uniform float mass3Factor;
+
+        out vec3 vPosition;
+        out vec3 vVelocity;
+        void main() {
+            vec3 position = aPosition;
+            vec3 velocity = aVelocity;
+
+            vec3 massVec = mass1Position - position;
+            float massDist2 = max(0.01, dot(massVec, massVec));
+            vec3 acceleration = mass1Factor * normalize(massVec) / massDist2;
+
+            massVec = mass2Position - position;
+            massDist2 = max(0.01, dot(massVec, massVec));
+            acceleration += mass2Factor * normalize(massVec) / massDist2;
+
+            massVec = mass3Position - position;
+            massDist2 = max(0.01, dot(massVec, massVec));
+            acceleration += mass3Factor * normalize(massVec) / massDist2;
+
+            velocity += acceleration;
+            velocity *= 0.9999;
+
+            vPosition = position + velocity;
+            vVelocity = velocity;
+        }
+    </script>
+    <script id="update-fs" type="x-fragment-shader">
+        #version 300 es
+        precision highp float;
+
+        void main() {
+            
+        }
+    </script>
+    <script id="main-vs" type="x-vertex-shader">
+        #version 300 es
+
+        layout(location=0) in vec4 position;
+        layout(location=2) in vec3 aColor;
+        
+        out vec3 vColor;
+
+        void main() {
+            vColor = aColor;
+            gl_PointSize = 2.0;
+            gl_Position = position;
+        }
+    </script>
+    <script id="main-fs" type="x-fragment-shader">
+        #version 300 es
+        precision highp float;
+
+        in vec3 vColor;
+
+        out vec4 fragColor;
+        void main() {
+            float alpha = 0.3;
+            fragColor = vec4(vColor * alpha, alpha);
+        }
+    </script>
+    <script type="text/javascript">
+        var canvas = document.getElementById("gl-canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        var gl = canvas.getContext("webgl2");
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        // Set up update program
+        var updateVsSource = document.getElementById("update-vs").text.trim();
+        var updateFsSource = document.getElementById("update-fs").text.trim();
+        
+        var updateVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(updateVertexShader, updateVsSource);
+        gl.compileShader(updateVertexShader);
+
+        if (!gl.getShaderParameter(updateVertexShader, gl.COMPILE_STATUS)) {
+            var i, lines;
+
+            console.error(gl.getShaderInfoLog(updateVertexShader));
+            lines = updateVsSource.split("\n");
+            for (i = 0; i < lines.length; ++i) {
+                console.error((i + 1) + ":", lines[i]);
+            }
+        }
+
+        var updateFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(updateFragmentShader, updateFsSource);
+        gl.compileShader(updateFragmentShader);
+
+        if (!gl.getShaderParameter(updateFragmentShader, gl.COMPILE_STATUS)) {
+            var i, lines;
+
+            console.error(gl.getShaderInfoLog(updateFragmentShader));
+            lines = updateFsSource.split("\n");
+            for (i = 0; i < lines.length; ++i) {
+                console.error((i + 1) + ":", lines[i]);
+            }
+        }
+
+        var updateProgram = gl.createProgram();
+        gl.attachShader(updateProgram, updateVertexShader);
+        gl.attachShader(updateProgram, updateFragmentShader);
+        gl.transformFeedbackVaryings(updateProgram, ["vPosition", "vVelocity"], gl.SEPARATE_ATTRIBS);
+        gl.linkProgram(updateProgram);
+
+        if (!gl.getProgramParameter(updateProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(updateProgram));
+        }
+
+        var mass1PositionLocation = gl.getUniformLocation(updateProgram, "mass1Position");
+        var mass1FactorLocation = gl.getUniformLocation(updateProgram, "mass1Factor");
+        var mass2PositionLocation = gl.getUniformLocation(updateProgram, "mass2Position");
+        var mass2FactorLocation = gl.getUniformLocation(updateProgram, "mass2Factor");
+        var mass3PositionLocation = gl.getUniformLocation(updateProgram, "mass3Position");
+        var mass3FactorLocation = gl.getUniformLocation(updateProgram, "mass3Factor");
+
+
+        var NUM_PARTICLES = 300000;
+        var positionData = new Float32Array(NUM_PARTICLES * 3);
+        var velocityData = new Float32Array(NUM_PARTICLES * 3);
+        var colorData = new Float32Array(NUM_PARTICLES * 3);
+
+        for (var i = 0; i < NUM_PARTICLES; ++i) {
+            var vec3i = i * 3;
+
+            positionData[vec3i] = Math.random() * 2 - 1;
+            positionData[vec3i + 1] = Math.random() * 2 - 1;
+            positionData[vec3i + 2] = Math.random() * 2 - 1;
+
+            colorData[vec3i] = Math.random();
+            colorData[vec3i + 1] = Math.random();
+            colorData[vec3i + 2] = Math.random();
+        }
+
+
+        // Set up main program
+        var mainVsSource = document.getElementById("main-vs").text.trim();
+        var mainFsSource = document.getElementById("main-fs").text.trim();
+        
+        var mainVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(mainVertexShader, mainVsSource);
+        gl.compileShader(mainVertexShader);
+
+        if (!gl.getShaderParameter(mainVertexShader, gl.COMPILE_STATUS)) {
+            var i, lines;
+
+            console.error(gl.getShaderInfoLog(mainVertexShader));
+            lines = mainVsSource.split("\n");
+            for (i = 0; i < lines.length; ++i) {
+                console.error((i + 1) + ":", lines[i]);
+            }
+        }
+
+        var mainFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(mainFragmentShader, mainFsSource);
+        gl.compileShader(mainFragmentShader);
+
+        if (!gl.getShaderParameter(mainFragmentShader, gl.COMPILE_STATUS)) {
+            var i, lines;
+
+            console.error(gl.getShaderInfoLog(mainFragmentShader));
+            lines = mainFsSource.split("\n");
+            for (i = 0; i < lines.length; ++i) {
+                console.error((i + 1) + ":", lines[i]);
+            }
+        }
+
+        var mainProgram = gl.createProgram();
+        gl.attachShader(mainProgram, mainVertexShader);
+        gl.attachShader(mainProgram, mainFragmentShader);
+        gl.linkProgram(mainProgram);
+
+        if (!gl.getProgramParameter(mainProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(mainProgram));
+        }
+
+        var vertexArrayA = gl.createVertexArray();
+        gl.bindVertexArray(vertexArrayA);
+
+        var positionBufferA = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBufferA);
+        gl.bufferData(gl.ARRAY_BUFFER, positionData, gl.STREAM_COPY);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        var velocityBufferA = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, velocityBufferA);
+        gl.bufferData(gl.ARRAY_BUFFER, velocityData, gl.STREAM_COPY);
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
+
+        var colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, colorData, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+        var vertexArrayB = gl.createVertexArray();
+        gl.bindVertexArray(vertexArrayB);
+
+        var positionBufferB = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBufferB);
+        gl.bufferData(gl.ARRAY_BUFFER, positionData, gl.STREAM_COPY);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        var velocityBufferB = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, velocityBufferB);
+        gl.bufferData(gl.ARRAY_BUFFER, velocityData, gl.STREAM_COPY);
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+        gl.bindVertexArray(null);
+
+
+        var readVertexArray = vertexArrayA;
+        var readPositionBuffer = positionBufferA;
+        var readVelocityBuffer = velocityBufferA;
+
+        var writeVertexArray = vertexArrayB;
+        var writePositionBuffer = positionBufferB;
+        var writeVelocityBuffer = velocityBufferB;
+        
+        gl.useProgram(updateProgram);
+        gl.uniform3fv(mass1PositionLocation,  new Float32Array([
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0
+        ]));
+        gl.uniform1f(mass1FactorLocation, Math.random() / 30000);
+        
+        gl.uniform3fv(mass2PositionLocation,  new Float32Array([
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0
+        ]));
+        gl.uniform1f(mass2FactorLocation, Math.random() / 30000);
+        
+        gl.uniform3fv(mass3PositionLocation,  new Float32Array([
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0,
+            Math.random() * 2.0 - 1.0
+        ]));
+        gl.uniform1f(mass3FactorLocation, Math.random() / 30000);
+
+        var transformFeedback = gl.createTransformFeedback();
+
+        function draw() {      
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
+            gl.useProgram(updateProgram);
+            gl.bindVertexArray(readVertexArray);
+
+            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, writePositionBuffer);
+            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, writeVelocityBuffer);
+
+            gl.enable(gl.RASTERIZER_DISCARD);
+            gl.beginTransformFeedback(gl.POINTS);
+            gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
+            gl.endTransformFeedback();
+            gl.disable(gl.RASTERIZER_DISCARD);
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+            
+            gl.useProgram(mainProgram);
+            gl.bindVertexArray(writeVertexArray);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
+
+            if (readVertexArray === vertexArrayA) {
+                readVertexArray = vertexArrayB;
+                readPositionBuffer = positionBufferB;
+                readVelocityBuffer = velocityBufferB;
+                writeVertexArray = vertexArrayA;
+                writePositionBuffer = positionBufferA;
+                writeVelocityBuffer = velocityBufferA;
+            } else {
+                readVertexArray = vertexArrayA;
+                readPositionBuffer = positionBufferA;
+                readVelocityBuffer = velocityBufferA;
+                writeVertexArray = vertexArrayB;
+                writePositionBuffer = positionBufferB;
+                writeVelocityBuffer = velocityBufferB;
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        requestAnimationFrame(draw);
+            
+
+    </script>
+    <a href="https://github.com/tsherif/picogl.js" id="github-ribbon"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+</body>
+</html>
