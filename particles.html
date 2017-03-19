@@ -44,12 +44,12 @@
         layout(location=1) in vec3 aVelocity;
 
         uniform Mass {
-            vec4 mass1Position;
             float mass1Factor;
-            vec4 mass2Position;
             float mass2Factor;
-            vec4 mass3Position;
             float mass3Factor;
+            vec4 mass1Position;
+            vec4 mass2Position;
+            vec4 mass3Position;
         };
     
         out vec3 vPosition;
@@ -121,7 +121,7 @@
             console.error("WebGL 2 not available");
             document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
         }
-        
+
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -292,28 +292,29 @@
         // SET UP UNIFORMS
         ///////////////////
 
-        var massUniformData = new Float32Array(24);
+        var massUniformData = new Float32Array(20);
+
+        massUniformData[0] = Math.random() / 30000;
+        massUniformData[1] = Math.random() / 30000;
+        massUniformData[2] = Math.random() / 30000;
 
         massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
-        ]));
-        massUniformData[4] = Math.random() / 30000;
+        ]), 4);
         
         massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
         ]), 8);
-        massUniformData[12] = Math.random() / 30000;
         
         massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
         ]), 16);
-        massUniformData[20] = Math.random() / 30000;
         
         var massUniformBuffer = gl.createBuffer();
         gl.bindBuffer(gl.UNIFORM_BUFFER, massUniformBuffer);
