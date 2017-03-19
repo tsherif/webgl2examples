@@ -162,10 +162,9 @@
         }
 
         ////////////////////////////
-        // GBUFFER SETUP
+        // GBUFFER PROGRAM SETUP
         ////////////////////////////
 
-        // Set up gbuffer program
         var geoVsSource =  document.getElementById("geo-vs").text.trim();
         var geoFsSource =  document.getElementById("geo-fs").text.trim();
 
@@ -174,13 +173,7 @@
         gl.compileShader(geoVertexShader);
 
         if (!gl.getShaderParameter(geoVertexShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(geoVertexShader));
-            lines = geoVsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var geoFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -188,13 +181,7 @@
         gl.compileShader(geoFragmentShader);
 
         if (!gl.getShaderParameter(geoFragmentShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(geoFragmentShader));
-            lines = geoFsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var geoProgram = gl.createProgram();
@@ -206,12 +193,18 @@
             console.error(gl.getProgramInfoLog(geoProgram));
         }
 
-        // Get uniform locations
+        //////////////////////////////////////////
+        // GET GBUFFFER PROGRAM UNIFORM LOCATIONS
+        //////////////////////////////////////////
+
         var matrixUniformLocation = gl.getUniformBlockIndex(geoProgram, "Matrices");
         gl.uniformBlockBinding(geoProgram, matrixUniformLocation, 0);
 
 
-        // Set up gBuffer
+        ////////////////////////////
+        // GBUFFER SETUP
+        ////////////////////////////
+
         var gBuffer = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
 
@@ -270,7 +263,6 @@
         // MAIN PROGRAM SETUP
         /////////////////////////////
 
-        // Set up main program
         var mainVsSource =  document.getElementById("main-vs").text.trim();
         var mainFsSource =  document.getElementById("main-fs").text.trim();
 
@@ -279,13 +271,7 @@
         gl.compileShader(mainVertexShader);
 
         if (!gl.getShaderParameter(mainVertexShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(mainVertexShader));
-            lines = mainVsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var mainFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -293,13 +279,7 @@
         gl.compileShader(mainFragmentShader);
 
         if (!gl.getShaderParameter(mainFragmentShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(mainFragmentShader));
-            lines = mainFsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var mainProgram = gl.createProgram();
@@ -311,7 +291,10 @@
             console.error(gl.getProgramInfoLog(mainProgram));
         }
 
-        // Get uniform locations
+        //////////////////////////////////////////////
+        // GET MAIN PROGRAM UNIFORM LOCATIONS
+        //////////////////////////////////////////////
+
         var lightUniformsLocation = gl.getUniformBlockIndex(mainProgram, "LightUniforms");
         gl.uniformBlockBinding(mainProgram, lightUniformsLocation, 0);
 
@@ -454,6 +437,9 @@
             gl.bufferData(gl.UNIFORM_BUFFER, lights[i].uniformData, gl.STATIC_DRAW);
         }
 
+        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, sceneUniformBuffer);
+
         var image = new Image();
 
         image.onload = function() {
@@ -469,28 +455,34 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
 
-
-            gl.useProgram(mainProgram);
-            gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, sceneUniformBuffer);
+            //////////////////
+            // BIND TEXTURES
+            //////////////////
 
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, positionTarget);
-            gl.uniform1i(positionBufferLocation, 0);
-
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_2D, normalTarget);
-            gl.uniform1i(normalBufferLocation, 1);
-
             gl.activeTexture(gl.TEXTURE2);
             gl.bindTexture(gl.TEXTURE_2D, uvTarget);
-            gl.uniform1i(uVBufferLocation, 2);
-
             gl.activeTexture(gl.TEXTURE3);
             gl.bindTexture(gl.TEXTURE_2D, colorTexture);
+
+            //////////////////////////////////
+            // SET UP MAIN PROGRAM SAMPLERS
+            //////////////////////////////////
+            
+            gl.useProgram(mainProgram);
+            gl.uniform1i(positionBufferLocation, 0);
+            gl.uniform1i(normalBufferLocation, 1);
+            gl.uniform1i(uVBufferLocation, 2);
             gl.uniform1i(textureMapLocation, 3);
 
             function draw() {
+
+                /////////////////////////
+                // DRAW TO GBUFFER
+                /////////////////////////
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
                 gl.useProgram(geoProgram);
@@ -516,6 +508,10 @@
 
                     gl.drawArrays(gl.TRIANGLES, 0, numCubeVertices);
                 }
+
+                /////////////////////////
+                // MAIN DRAW PASS
+                /////////////////////////
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                 gl.useProgram(mainProgram);

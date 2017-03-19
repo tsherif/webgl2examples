@@ -62,13 +62,7 @@
         gl.compileShader(vertexShader);
 
         if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(vertexShader));
-            lines = vsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -76,13 +70,7 @@
         gl.compileShader(fragmentShader);
 
         if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(fragmentShader));
-            lines = fsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var program = gl.createProgram();

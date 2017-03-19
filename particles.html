@@ -138,13 +138,7 @@
         gl.compileShader(updateVertexShader);
 
         if (!gl.getShaderParameter(updateVertexShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(updateVertexShader));
-            lines = updateVsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var updateFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -152,13 +146,7 @@
         gl.compileShader(updateFragmentShader);
 
         if (!gl.getShaderParameter(updateFragmentShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(updateFragmentShader));
-            lines = updateFsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var updateProgram = gl.createProgram();
@@ -171,12 +159,17 @@
             console.error(gl.getProgramInfoLog(updateProgram));
         }
 
+        ///////////////////////////////////////////
+        // GET UPDATE PROGRAM UNIFORM LOCATIONS
+        ///////////////////////////////////////////
+
         var massUniformsLocation = gl.getUniformBlockIndex(updateProgram, "Mass");
         gl.uniformBlockBinding(updateProgram, massUniformsLocation, 0);
 
         ///////////////////////////
         // MAIN PROGRAM
         ///////////////////////////
+
         var mainVsSource = document.getElementById("main-vs").text.trim();
         var mainFsSource = document.getElementById("main-fs").text.trim();
         
@@ -185,13 +178,7 @@
         gl.compileShader(mainVertexShader);
 
         if (!gl.getShaderParameter(mainVertexShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(mainVertexShader));
-            lines = mainVsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var mainFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -199,13 +186,7 @@
         gl.compileShader(mainFragmentShader);
 
         if (!gl.getShaderParameter(mainFragmentShader, gl.COMPILE_STATUS)) {
-            var i, lines;
-
             console.error(gl.getShaderInfoLog(mainFragmentShader));
-            lines = mainFsSource.split("\n");
-            for (i = 0; i < lines.length; ++i) {
-                console.error((i + 1) + ":", lines[i]);
-            }
         }
 
         var mainProgram = gl.createProgram();
@@ -289,7 +270,7 @@
         var writeVelocityBuffer = velocityBufferB;
         
         ///////////////////
-        // SET UP UNIFORMS
+        // UNIFORM DATA
         ///////////////////
 
         var massUniformData = new Float32Array(20);
@@ -324,8 +305,9 @@
         var transformFeedback = gl.createTransformFeedback();
 
         function draw() {
+
             //////////////////////////////
-            // TRANSORM FEEDBACK PASS
+            // TRANSFORM FEEDBACK PASS
             //////////////////////////////
 
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
