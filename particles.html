@@ -38,31 +38,35 @@
     <script id="update-vs" type="x-shader/vs">
         #version 300 es
 
+        layout(std140) uniform;
+
         layout(location=0) in vec3 aPosition;
         layout(location=1) in vec3 aVelocity;
 
-        uniform vec3 mass1Position;
-        uniform float mass1Factor;
-        uniform vec3 mass2Position;
-        uniform float mass2Factor;
-        uniform vec3 mass3Position;
-        uniform float mass3Factor;
-
+        uniform Mass {
+            vec4 mass1Position;
+            float mass1Factor;
+            vec4 mass2Position;
+            float mass2Factor;
+            vec4 mass3Position;
+            float mass3Factor;
+        };
+    
         out vec3 vPosition;
         out vec3 vVelocity;
         void main() {
             vec3 position = aPosition;
             vec3 velocity = aVelocity;
 
-            vec3 massVec = mass1Position - position;
+            vec3 massVec = mass1Position.xyz - position;
             float massDist2 = max(0.01, dot(massVec, massVec));
             vec3 acceleration = mass1Factor * normalize(massVec) / massDist2;
 
-            massVec = mass2Position - position;
+            massVec = mass2Position.xyz - position;
             massDist2 = max(0.01, dot(massVec, massVec));
             acceleration += mass2Factor * normalize(massVec) / massDist2;
 
-            massVec = mass3Position - position;
+            massVec = mass3Position.xyz - position;
             massDist2 = max(0.01, dot(massVec, massVec));
             acceleration += mass3Factor * normalize(massVec) / massDist2;
 
@@ -162,12 +166,8 @@
             console.error(gl.getProgramInfoLog(updateProgram));
         }
 
-        var mass1PositionLocation = gl.getUniformLocation(updateProgram, "mass1Position");
-        var mass1FactorLocation = gl.getUniformLocation(updateProgram, "mass1Factor");
-        var mass2PositionLocation = gl.getUniformLocation(updateProgram, "mass2Position");
-        var mass2FactorLocation = gl.getUniformLocation(updateProgram, "mass2Factor");
-        var mass3PositionLocation = gl.getUniformLocation(updateProgram, "mass3Position");
-        var mass3FactorLocation = gl.getUniformLocation(updateProgram, "mass3Factor");
+        var massUniformsLocation = gl.getUniformBlockIndex(updateProgram, "Mass");
+        gl.uniformBlockBinding(updateProgram, massUniformsLocation, 0);
 
         ///////////////////////////
         // MAIN PROGRAM
@@ -216,7 +216,7 @@
         // SET UP GEOMETRY
         //////////////////////////
 
-        var NUM_PARTICLES = 300000;
+        var NUM_PARTICLES = 200000;
         var positionData = new Float32Array(NUM_PARTICLES * 3);
         var velocityData = new Float32Array(NUM_PARTICLES * 3);
         var colorData = new Float32Array(NUM_PARTICLES * 3);
@@ -287,27 +287,34 @@
         // SET UP UNIFORMS
         ///////////////////
 
-        gl.useProgram(updateProgram);
-        gl.uniform3fv(mass1PositionLocation,  new Float32Array([
+        var massUniformData = new Float32Array(24);
+
+        massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
         ]));
-        gl.uniform1f(mass1FactorLocation, Math.random() / 30000);
+        massUniformData[4] = Math.random() / 30000;
         
-        gl.uniform3fv(mass2PositionLocation,  new Float32Array([
+        massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
-        ]));
-        gl.uniform1f(mass2FactorLocation, Math.random() / 30000);
+        ]), 8);
+        massUniformData[12] = Math.random() / 30000;
         
-        gl.uniform3fv(mass3PositionLocation,  new Float32Array([
+        massUniformData.set(new Float32Array([
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0,
             Math.random() * 2.0 - 1.0
-        ]));
-        gl.uniform1f(mass3FactorLocation, Math.random() / 30000);
+        ]), 16);
+        massUniformData[20] = Math.random() / 30000;
+        
+        var massUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, massUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, massUniformData, gl.STATIC_DRAW);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, massUniformBuffer);
+
 
         var transformFeedback = gl.createTransformFeedback();
 
