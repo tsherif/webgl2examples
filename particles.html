@@ -117,7 +117,10 @@
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-        // Set up update program
+        ///////////////////////////
+        // PARTICLE UPDATE PROGRAM
+        ///////////////////////////
+
         var updateVsSource = document.getElementById("update-vs").text.trim();
         var updateFsSource = document.getElementById("update-fs").text.trim();
         
@@ -166,26 +169,9 @@
         var mass3PositionLocation = gl.getUniformLocation(updateProgram, "mass3Position");
         var mass3FactorLocation = gl.getUniformLocation(updateProgram, "mass3Factor");
 
-
-        var NUM_PARTICLES = 300000;
-        var positionData = new Float32Array(NUM_PARTICLES * 3);
-        var velocityData = new Float32Array(NUM_PARTICLES * 3);
-        var colorData = new Float32Array(NUM_PARTICLES * 3);
-
-        for (var i = 0; i < NUM_PARTICLES; ++i) {
-            var vec3i = i * 3;
-
-            positionData[vec3i] = Math.random() * 2 - 1;
-            positionData[vec3i + 1] = Math.random() * 2 - 1;
-            positionData[vec3i + 2] = Math.random() * 2 - 1;
-
-            colorData[vec3i] = Math.random();
-            colorData[vec3i + 1] = Math.random();
-            colorData[vec3i + 2] = Math.random();
-        }
-
-
-        // Set up main program
+        ///////////////////////////
+        // MAIN PROGRAM
+        ///////////////////////////
         var mainVsSource = document.getElementById("main-vs").text.trim();
         var mainFsSource = document.getElementById("main-fs").text.trim();
         
@@ -224,6 +210,27 @@
 
         if (!gl.getProgramParameter(mainProgram, gl.LINK_STATUS)) {
             console.error(gl.getProgramInfoLog(mainProgram));
+        }
+
+        //////////////////////////
+        // SET UP GEOMETRY
+        //////////////////////////
+
+        var NUM_PARTICLES = 300000;
+        var positionData = new Float32Array(NUM_PARTICLES * 3);
+        var velocityData = new Float32Array(NUM_PARTICLES * 3);
+        var colorData = new Float32Array(NUM_PARTICLES * 3);
+
+        for (var i = 0; i < NUM_PARTICLES; ++i) {
+            var vec3i = i * 3;
+
+            positionData[vec3i] = Math.random() * 2 - 1;
+            positionData[vec3i + 1] = Math.random() * 2 - 1;
+            positionData[vec3i + 2] = Math.random() * 2 - 1;
+
+            colorData[vec3i] = Math.random();
+            colorData[vec3i + 1] = Math.random();
+            colorData[vec3i + 2] = Math.random();
         }
 
         var vertexArrayA = gl.createVertexArray();
@@ -268,7 +275,6 @@
 
         gl.bindVertexArray(null);
 
-
         var readVertexArray = vertexArrayA;
         var readPositionBuffer = positionBufferA;
         var readVelocityBuffer = velocityBufferA;
@@ -277,6 +283,10 @@
         var writePositionBuffer = positionBufferB;
         var writeVelocityBuffer = velocityBufferB;
         
+        ///////////////////
+        // SET UP UNIFORMS
+        ///////////////////
+
         gl.useProgram(updateProgram);
         gl.uniform3fv(mass1PositionLocation,  new Float32Array([
             Math.random() * 2.0 - 1.0,
@@ -301,7 +311,11 @@
 
         var transformFeedback = gl.createTransformFeedback();
 
-        function draw() {      
+        function draw() {
+            //////////////////////////////
+            // TRANSORM FEEDBACK PASS
+            //////////////////////////////
+
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
             gl.useProgram(updateProgram);
             gl.bindVertexArray(readVertexArray);
@@ -316,10 +330,18 @@
             gl.disable(gl.RASTERIZER_DISCARD);
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
             
+            //////////////
+            // DRAW PASS
+            //////////////
+
             gl.useProgram(mainProgram);
             gl.bindVertexArray(writeVertexArray);
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
+
+            //////////////////
+            // SWAP BUFFERS
+            //////////////////
 
             if (readVertexArray === vertexArrayA) {
                 readVertexArray = vertexArrayB;
