@@ -11,4 +11,4 @@ Currently include:
 
 All examples are implemented in a single HTML file with minimal use of functions, modules, classes or other abstractions. The goal is to allow the reader to easily see, in sequential order, all GL calls that are made.
 
-These examples can be thought of as companion to Shrek Shao and Trung Le's excellent [WebGL 2 Samples Pack](http://webglsamples.org/WebGL2Samples/). While their samples demonstrate individual features of WebGL 2, this project demonstrates how those feature can be used to implement commonly-used algorithms.
+These examples can be thought of as companion to Shrek Shao and Trung Le's excellent [WebGL 2 Samples Pack](http://webglsamples.org/WebGL2Samples/). While their samples demonstrate individual features of WebGL 2, this project aims to demonstrate how those feature can be used to implement commonly-used algorithms.
