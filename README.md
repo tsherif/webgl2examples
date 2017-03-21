@@ -17,7 +17,7 @@ Contributing
 ------------
 
 Contributions are welcome! Especially new examples that show features that aren't included in the current set. The only requirement is that new examples use a similar basic structure:
-- All GL calls are made at the top level (no functions wrapping them). A reader should be able to read through the source HTML and see all GL calls that are made, in the order that they made.
+- All GL calls are made at the top level (without being split up into "helper functions"). A reader should be able to read through the source HTML and see all GL calls that are made, in the order that they made.
 - Shader code should be included at the top of the HTML file in script elements.
 - Small utility functions are fine (but shouldn't contain any GL calls!) and should go in [utils/utils.js](https://github.com/tsherif/webgl2examples/blob/master/utils/utils.js).
 - Use [glMatrix](https://github.com/tsherif/webgl2examples/blob/master/utils/gl-matrix.js) for the math.
