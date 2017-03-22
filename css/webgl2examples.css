@@ -13,4 +13,10 @@ body {
     color: white;
     background-color: gray;
     padding: 0.5em;
+    max-width: 18%;
+}
+
+#example-title header {
+    font-size: 1.2em;
+    font-weight: bold;
 }
