@@ -308,6 +308,9 @@
         var transformFeedback = gl.createTransformFeedback();
 
         function draw() {
+            // NOTE(Tarek): Putting the clear after the transform feedback
+            // pass seems to cause it to be ignored on OSX 10.12/Intel Iris
+            gl.clear(gl.COLOR_BUFFER_BIT);
 
             //////////////////////////////
             // TRANSFORM FEEDBACK PASS
@@ -333,7 +336,6 @@
 
             gl.useProgram(mainProgram);
             gl.bindVertexArray(writeVertexArray);
-            gl.clear(gl.COLOR_BUFFER_BIT);
             gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
 
             //////////////////
