@@ -173,6 +173,16 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
+        var gl = canvas.getContext("webgl2");
+
+        if (!gl) {
+            console.error("WebGL 2 not available");
+            document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
+        }
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.DEPTH_TEST);
+
         /////////////////////
         // DOF CONSTANTS
         /////////////////////
@@ -186,11 +196,6 @@
         var BLUR_COEFFICIENT = FOCAL_LENGTH * MAGNIFICATION / FSTOP;
         var PPM = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 35;   
         var DEPTH_RANGE = vec2.fromValues(NEAR, FAR);
-
-        var gl = canvas.getContext("webgl2");
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.enable(gl.DEPTH_TEST);
-
 
         /////////////////////
         // MAIN PROGRAM
@@ -320,7 +325,7 @@
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         
 
-         /////////////////////
+        /////////////////////
         // SET UP GEOMETRY
         /////////////////////
 
@@ -387,6 +392,9 @@
 
         var lightPosition = vec3.fromValues(1, 1, 0.5);
 
+        var hTexelOffset = vec2.fromValues(1.0, 0.0);
+        var vTexelOffset = vec2.fromValues(0.0, 1.0);
+
         var sceneUniformData = new Float32Array(24);
         sceneUniformData.set(viewProjMatrix);
         sceneUniformData.set(eyePosition, 16);
@@ -412,6 +420,11 @@
         var image = new Image();
 
         image.onload = function() {
+
+            ///////////////////////
+            // BIND TEXTURES
+            ///////////////////////
+
             var texture = gl.createTexture();
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -460,14 +473,12 @@
             gl.useProgram(blurProgram);
             gl.uniform1i(depthLocation, 2);
 
-            var hTexelOffset = vec2.fromValues(1.0, 0.0);
-            var vTexelOffset = vec2.fromValues(0.0, 1.0);
-
             function draw() {
 
                 ////////////////////
                 // DRAW BOXES
                 ////////////////////
+
                 gl.bindFramebuffer(gl.FRAMEBUFFER, boxBuffer);
                 gl.useProgram(boxProgram);
                 gl.bindVertexArray(boxArray);
