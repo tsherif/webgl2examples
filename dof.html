@@ -55,7 +55,7 @@
             mat4 viewProj;
             vec4 eyePosition;
             vec4 lightPosition;
-        } uScene;       
+        };       
         
         uniform mat4 uModel;
 
@@ -67,7 +67,7 @@
             vPosition = worldPosition.xyz;
             vUV = uv;
             vNormal = (uModel * vec4(normal, 0.0)).xyz;
-            gl_Position = uScene.viewProj * worldPosition;
+            gl_Position = viewProj * worldPosition;
         }
     </script>
     <script type="x-shader/vf" id="fragment-boxes">
@@ -80,7 +80,7 @@
             mat4 viewProj;
             vec4 eyePosition;
             vec4 lightPosition;
-        } uScene;
+        };
 
         uniform sampler2D tex;
         
@@ -93,8 +93,8 @@
             vec3 color = texture(tex, vUV).rgb;
 
             vec3 normal = normalize(vNormal);
-            vec3 eyeVec = normalize(uScene.eyePosition.xyz - vPosition);
-            vec3 incidentVec = normalize(vPosition - uScene.lightPosition.xyz);
+            vec3 eyeVec = normalize(eyePosition.xyz - vPosition);
+            vec3 incidentVec = normalize(vPosition - lightPosition.xyz);
             vec3 lightVec = -incidentVec;
             float diffuse = max(dot(lightVec, normal), 0.0);
             float highlight = pow(max(dot(eyeVec, reflect(incidentVec, normal)), 0.0), 100.0);
@@ -115,12 +115,17 @@
         #version 300 es
         precision highp float;
 
+        layout(std140, column_major) uniform;
+
         #define MAX_BLUR 20.0
 
-        uniform float uFocusDistance;
-        uniform float uBlurCoefficient;
-        uniform float uPPM;
-        uniform vec2 uDepthRange;
+        uniform DOFUniforms {
+           float uFocusDistance;
+           float uBlurCoefficient;
+           float uPPM;
+           vec2  uDepthRange; 
+       };
+        
         uniform vec2 uTexelOffset;
 
         uniform sampler2D uTexture;
@@ -249,11 +254,9 @@
         var modelMatrixLocation = gl.getUniformLocation(boxProgram, "uModel");
         var texLocation = gl.getUniformLocation(boxProgram, "tex");
 
-        
-        var focusDistanceLocation = gl.getUniformLocation(blurProgram, "uFocusDistance");
-        var blurCoefficientLocation = gl.getUniformLocation(blurProgram, "uBlurCoefficient");
-        var ppmLocation = gl.getUniformLocation(blurProgram, "uPPM");
-        var depthRangeLocation = gl.getUniformLocation(blurProgram, "uDepthRange");
+        var dofUniformsLocation = gl.getUniformBlockIndex(blurProgram, "DOFUniforms");
+        gl.uniformBlockBinding(blurProgram, dofUniformsLocation, 1);
+
         var texelOffsetLocation = gl.getUniformLocation(blurProgram, "uTexelOffset");
         var textureLocation = gl.getUniformLocation(blurProgram, "uTexture");
         var depthLocation = gl.getUniformLocation(blurProgram, "uDepth");
@@ -382,6 +385,18 @@
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
+
+        var dofUniformData = new Float32Array(8);
+        dofUniformData[0] = FOCUS_DISTANCE;
+        dofUniformData[1] = BLUR_COEFFICIENT;
+        dofUniformData[2] = PPM;
+        dofUniformData.set(depthRange, 4); 
+
+        var dofUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, dofUniformBuffer);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, dofUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, dofUniformData, gl.STATIC_DRAW);
+
         var image = new Image();
 
         image.onload = function() {
@@ -431,10 +446,6 @@
             gl.uniform1i(texLocation, 0);
 
             gl.useProgram(blurProgram);
-            gl.uniform1f(focusDistanceLocation, FOCUS_DISTANCE);
-            gl.uniform1f(blurCoefficientLocation, BLUR_COEFFICIENT);
-            gl.uniform1f(ppmLocation, PPM);
-            gl.uniform2fv(depthRangeLocation, depthRange);
             gl.uniform1i(depthLocation, 2);
 
             var hTexelOffset = vec2.fromValues(1.0, 0.0);
@@ -445,8 +456,6 @@
                 gl.bindFramebuffer(gl.FRAMEBUFFER, boxBuffer);
                 gl.useProgram(boxProgram);
                 gl.bindVertexArray(boxArray);
-                gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
-                gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (var i = 0, len = boxes.length; i < len; ++i) {
@@ -461,9 +470,12 @@
                 }
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, hblurBuffer);
-                // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                 gl.useProgram(blurProgram);
                 gl.bindVertexArray(quadArray);
+                gl.bindBuffer(gl.UNIFORM_BUFFER, dofUniformBuffer);
+                gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, dofUniformBuffer);
+
+
                 gl.uniform1i(textureLocation, 1);
                 gl.uniform2fv(texelOffsetLocation, hTexelOffset);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
