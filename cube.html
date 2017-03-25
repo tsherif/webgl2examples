@@ -71,6 +71,8 @@
         #version 300 es
         precision highp float;
 
+        layout(std140, column_major) uniform;
+
         uniform SceneUniforms {
             mat4 viewProj;
             vec4 eyePosition;
