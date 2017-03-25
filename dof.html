@@ -35,7 +35,7 @@
     <div id="example-title">
         <header>WebGL 2 Example: Depth of Field</header>
         <div id="features">
-            Features: Vertex Arrays, Uniform Buffers, Depth Textures, texelFetch
+            Features: Vertex Arrays, Uniform Buffers, Depth Textures, texelFetch, Hardware Instancing
         </div>
         <div>
             <a href="https://github.com/tsherif/webgl2examples/blob/master/dof.html">Source code</a>
@@ -50,6 +50,7 @@
         layout(location=0) in vec4 position;
         layout(location=1) in vec2 uv;
         layout(location=2) in vec3 normal;
+        layout(location=3) in mat4 modelMatrix;
         
         uniform SceneUniforms {
             mat4 uViewProj;
@@ -57,16 +58,14 @@
             vec4 uLightPosition;
         };       
         
-        uniform mat4 uModel;
-
         out vec3 vPosition;
         out vec2 vUV;
         out vec3 vNormal;
         void main() {
-            vec4 worldPosition = uModel * position;
+            vec4 worldPosition = modelMatrix * position;
             vPosition = worldPosition.xyz;
             vUV = uv;
-            vNormal = (uModel * vec4(normal, 0.0)).xyz;
+            vNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
             gl_Position = uViewProj * worldPosition;
         }
     </script>
@@ -196,6 +195,32 @@
         var BLUR_COEFFICIENT = FOCAL_LENGTH * MAGNIFICATION / FSTOP;
         var PPM = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 35;   
         var DEPTH_RANGE = vec2.fromValues(NEAR, FAR);
+
+        /////////////////////////
+        // OBJECTS DESCRIPTIONS
+        /////////////////////////
+
+        var NUM_ROWS = 5;
+        var BOXES_PER_ROW = 20;
+        var NUM_BOXES = BOXES_PER_ROW * NUM_ROWS;
+        var boxes = new Array(NUM_BOXES);
+
+        var boxI = 0;
+        for (var j = 0; j < NUM_ROWS; ++j) {
+            var rowOffset = (j - Math.floor(NUM_ROWS / 2));
+            for (var i = 0; i < BOXES_PER_ROW; ++i) {
+                boxes[boxI] = {
+                    scale: [0.9, 0.9, 0.9],
+                    rotate: [-boxI / Math.PI, 0, boxI / Math.PI],
+                    translate: [-i + 2 - rowOffset, 0, -i + 2 + rowOffset],
+                    modelMatrix: mat4.create(),
+                };
+
+                ++boxI;
+            }
+        }
+
+        var modelMatrixData = new Float32Array(NUM_BOXES * 16);
 
         /////////////////////
         // MAIN PROGRAM
@@ -353,11 +378,30 @@
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
-        var positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(0);
+        var normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+        // Columns of matrix as separate attributes for instancing
+        var matrixBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, modelMatrixData, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 64, 0);
+        gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 64, 16);
+        gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 64, 32);
+        gl.vertexAttribPointer(6, 4, gl.FLOAT, false, 64, 48);
+
+        gl.vertexAttribDivisor(3, 1);
+        gl.vertexAttribDivisor(4, 1);
+        gl.vertexAttribDivisor(5, 1);
+        gl.vertexAttribDivisor(6, 1);
+
+        gl.enableVertexAttribArray(3);
+        gl.enableVertexAttribArray(4);
+        gl.enableVertexAttribArray(5);
+        gl.enableVertexAttribArray(6);
 
         var quadArray = gl.createVertexArray();
         gl.bindVertexArray(quadArray);
@@ -446,27 +490,6 @@
             gl.activeTexture(gl.TEXTURE3);
             gl.bindTexture(gl.TEXTURE_2D, hblurTarget);
 
-            var NUM_ROWS = 5;
-            var BOXES_PER_ROW = 20;
-            var NUM_BOXES = BOXES_PER_ROW * NUM_ROWS;
-            var boxes = new Array(NUM_BOXES);
-
-            var boxI = 0;
-            for (var j = 0; j < NUM_ROWS; ++j) {
-                var rowOffset = (j - Math.floor(NUM_ROWS / 2));
-                for (var i = 0; i < BOXES_PER_ROW; ++i) {
-                    boxes[boxI] = {
-                        scale: [0.9, 0.9, 0.9],
-                        rotate: [-boxI / Math.PI, 0, boxI / Math.PI],
-                        translate: [-i + 2 - rowOffset, 0, -i + 2 + rowOffset],
-                        modelMatrix: mat4.create(),
-                        mvpMatrix: mat4.create(),
-                    }
-
-                    ++boxI;
-                }
-            }
-
             gl.useProgram(boxProgram);
             gl.uniform1i(texLocation, 0);
 
@@ -482,7 +505,6 @@
                 gl.bindFramebuffer(gl.FRAMEBUFFER, boxBuffer);
                 gl.useProgram(boxProgram);
                 gl.bindVertexArray(boxArray);
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (var i = 0, len = boxes.length; i < len; ++i) {
                     boxes[i].rotate[0] += 0.01;
@@ -490,10 +512,14 @@
 
                     utils.xformMatrix(boxes[i].modelMatrix, boxes[i].translate, boxes[i].rotate, boxes[i].scale);
                 
-                    gl.uniformMatrix4fv(modelMatrixLocation, false, boxes[i].modelMatrix);
-
-                    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+                    modelMatrixData.set(boxes[i].modelMatrix, i * 16);
                 }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, modelMatrixData);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                gl.drawArraysInstanced(gl.TRIANGLES, 0, numVertices, boxes.length);
+
 
                 ////////////////////
                 // HORIZONTAL BLUR
