@@ -386,12 +386,6 @@
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
-        var normalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(2);
-
         // Columns of matrix as separate attributes for instancing
         var matrixBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
