@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<!--
+  The MIT License (MIT)
+
+  Copyright (c) 2017 Tarek Sherif
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<!-- 
+    Based on "Weighted Blended Order-Independent Transparency"
+    By Morgan McGuire and Louis Bavoil 
+    http://jcgt.org/published/0002/02/09/
+-->
+<html>
+<head>
+    <title>WebGL 2 Example: Order-independent Transparency</title>
+    <script src="utils/gl-matrix.js"></script>
+    <script src="utils/utils.js"></script>
+    <link rel="stylesheet" href="css/webgl2examples.css">
+</head>
+<body>
+    <div id="example-title">
+        <header>WebGL 2 Example: Order-independent Transparency</header>
+        <div id="features">
+            Features: Vertex Arrays, Uniform Buffers, Multiple Render Targets, Float Textures, texelFetch, Hardware Instancing, EXT_color_buffer_float
+        </div>
+        <div>
+            <a href="https://github.com/tsherif/webgl2examples/blob/master/oit.html">Source code</a>
+        </div>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+    <script type="x-shader/vs" id="vertex-accum">
+        #version 300 es
+
+        layout(std140, column_major) uniform;
+        
+        layout(location=0) in vec4 position;
+        layout(location=1) in vec2 uv;
+        layout(location=2) in vec3 normal;
+        layout(location=3) in vec4 color;
+        layout(location=4) in mat4 modelMatrix;
+        
+        uniform SceneUniforms {
+            mat4 uViewProj;
+            vec4 uEyePosition;
+            vec4 uLightPosition;
+        };       
+        
+        out vec3 vPosition;
+        out vec2 vUV;
+        out vec3 vNormal;
+        flat out vec4 vColor;
+
+        void main() {
+            vec4 worldPosition = modelMatrix * position;
+            vPosition = worldPosition.xyz;
+            vUV = uv;
+            vNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
+            vColor = color;
+            gl_Position = uViewProj * worldPosition;
+        }
+    </script>
+    <script type="x-shader/fs" id="fragment-accum">
+        #version 300 es
+        precision highp float;
+
+        layout(std140, column_major) uniform;
+
+        uniform SceneUniforms {
+            mat4 uViewProj;
+            vec4 uEyePosition;
+            vec4 uLightPosition;
+        };
+
+        uniform sampler2D uTexture;
+        
+        in vec3 vPosition;
+        in vec2 vUV;
+        in vec3 vNormal;
+        flat in vec4 vColor;
+
+        layout(location=0) out vec4 accumColor;
+        layout(location=1) out float accumAlpha;
+
+        float weight(float z, float a) {
+            return clamp(pow(min(1.0, a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - z * 0.9, 3.0), 1e-2, 3e3);
+        }
+
+        void main() {
+            vec3 position = vPosition.xyz;
+            vec3 normal = normalize(vNormal.xyz);
+            vec2 uv = vUV;
+
+            vec4 baseColor = vColor * texture(uTexture, uv);
+            vec3 eyeDirection = normalize(uEyePosition.xyz - position);
+            vec3 lightVec = uLightPosition.xyz - position;
+            vec3 lightDirection = normalize(lightVec);
+            vec3 reflectionDirection = reflect(-lightDirection, normal);
+            float nDotL = max(dot(lightDirection, normal), 0.0);
+            float diffuse = nDotL;
+            float ambient = 0.2;
+            float specular = pow(max(dot(reflectionDirection, eyeDirection), 0.0), 20.0);
+
+            vec4 color = vec4((ambient + diffuse + specular) * baseColor.rgb, vColor.a);
+            color.rgb *= color.a;
+            float w = weight(gl_FragCoord.z, color.a);
+            accumColor = vec4(color.rgb * w, color.a);
+            accumAlpha = color.a * w;
+        }
+    </script>
+    <script type="x-shader/vs" id="vertex-quad">
+        #version 300 es
+
+        layout(location=0) in vec4 aPosition;
+        
+        void main() {
+            gl_Position = aPosition;
+        }
+    </script>
+
+    <script type="x-shader/fs" id="fragment-draw">
+        #version 300 es
+        precision highp float;
+
+        uniform sampler2D uAccumulate;
+        uniform sampler2D uAccumulateAlpha;
+        out vec4 fragColor;
+        void main() {
+            ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+            vec4 accum = texelFetch(uAccumulate, fragCoord, 0);
+            float a = 1.0 - accum.a;
+            accum.a = texelFetch(uAccumulateAlpha, fragCoord, 0).r;
+            fragColor = vec4(a * accum.rgb / clamp(accum.a, 0.001, 50000.0), a);
+        }
+    </script>
+    <script>
+        var canvas = document.getElementById("gl-canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        var gl = canvas.getContext("webgl2");
+
+        if (!gl) {
+            console.error("WebGL 2 not available");
+            document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
+        }
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.BLEND);
+        gl.depthMask(false);
+
+        if (!gl.getExtension("EXT_color_buffer_float")) {
+            console.error("FLOAT color buffer not available");
+            document.body.innerHTML = "This example requires EXT_color_buffer_float which is unavailable on this system."
+        }
+
+        /////////////////////////
+        // OBJECT DESCRIPTIONS
+        /////////////////////////
+
+        var NUM_SPHERES = 32;
+        var NUM_PER_ROW = 8;
+        var RADIUS = 0.6;
+        var spheres = new Array(NUM_SPHERES);
+        var sphereDrawCalls = new Array(NUM_SPHERES);
+
+        var colorData = new Float32Array(NUM_SPHERES * 4);
+        var modelMatrixData = new Float32Array(NUM_SPHERES * 16);
+
+        for (var i = 0; i < NUM_SPHERES; ++i) {
+            var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
+            var x = Math.sin(angle) * RADIUS;
+            var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
+            var z = Math.cos(angle) * RADIUS;
+            spheres[i] = {
+                scale: [0.8, 0.8, 0.8],
+                rotate: [0, 0, 0], // Will be used for global rotation
+                translate: [x, y, z],
+                modelMatrix: mat4.create()
+            };
+
+            colorData.set(vec4.fromValues(
+                Math.sqrt(Math.random()),
+                Math.sqrt(Math.random()),
+                Math.sqrt(Math.random()),
+                0.5
+            ), i * 4);
+        }
+
+        /////////////////////////
+        // ACCUMULATION PROGRAM
+        /////////////////////////
+
+        var accumVsSource =  document.getElementById("vertex-accum").text.trim();
+        var accumFsSource =  document.getElementById("fragment-accum").text.trim();
+        
+        var accumVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(accumVertexShader, accumVsSource);
+        gl.compileShader(accumVertexShader);
+
+        if (!gl.getShaderParameter(accumVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(accumVertexShader));
+        }
+
+        var accumFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(accumFragmentShader, accumFsSource);
+        gl.compileShader(accumFragmentShader);
+
+        if (!gl.getShaderParameter(accumFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(accumFragmentShader));
+        }
+
+        var accumProgram = gl.createProgram();
+        gl.attachShader(accumProgram, accumVertexShader);
+        gl.attachShader(accumProgram, accumFragmentShader);
+        gl.linkProgram(accumProgram);
+
+        if (!gl.getProgramParameter(accumProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(accumProgram));
+        }
+
+        /////////////////////
+        // DRAW PROGRAM
+        /////////////////////
+
+        var quadVsSource =  document.getElementById("vertex-quad").text.trim();
+        var drawFsSource = document.getElementById("fragment-draw").text.trim();
+
+        var drawVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(drawVertexShader, quadVsSource);
+        gl.compileShader(drawVertexShader);
+
+        if (!gl.getShaderParameter(drawVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(drawVertexShader));
+        }
+
+        var drawFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(drawFragmentShader, drawFsSource);
+        gl.compileShader(drawFragmentShader);
+
+        if (!gl.getShaderParameter(drawFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(drawFragmentShader));
+        }
+
+        var drawProgram = gl.createProgram();
+        gl.attachShader(drawProgram, drawVertexShader);
+        gl.attachShader(drawProgram, drawFragmentShader);
+        gl.linkProgram(drawProgram);
+
+        if (!gl.getProgramParameter(drawProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(drawProgram));
+        }
+
+        /////////////////////////
+        // GET UNIFORM LOCATIONS
+        /////////////////////////
+
+        var sceneUniformsLocation = gl.getUniformBlockIndex(accumProgram, "SceneUniforms");
+        gl.uniformBlockBinding(accumProgram, sceneUniformsLocation, 0);
+
+        var modelMatrixLocation = gl.getUniformLocation(accumProgram, "uModel");
+        var textureLocation = gl.getUniformLocation(accumProgram, "uTexture");
+
+        var accumLocation = gl.getUniformLocation(drawProgram, "uAccumulate");
+        var accumAlphaLocation = gl.getUniformLocation(drawProgram, "uAccumulateAlpha");
+
+        ////////////////////////////////
+        //  SET UP FRAMEBUFFERS
+        ////////////////////////////////
+
+        var accumBuffer = gl.createFramebuffer();
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, accumBuffer);
+        gl.activeTexture(gl.TEXTURE0);
+
+        var accumTarget = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, accumTarget);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.FLOAT, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, accumTarget, 0);
+
+        var accumAlphaTarget = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, accumAlphaTarget);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.FLOAT, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, accumAlphaTarget, 0);
+
+        var depthTarget = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, depthTarget);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT16, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTarget, 0);
+
+         gl.drawBuffers([
+            gl.COLOR_ATTACHMENT0,
+            gl.COLOR_ATTACHMENT1
+        ]);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        /////////////////////
+        // SET UP GEOMETRY
+        /////////////////////
+
+        var sphere = utils.createSphere({radius: 0.5});
+        var numVertices = sphere.positions.length / 3;
+
+        var sphereArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereArray);
+
+        var positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        var uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.uvs, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
+
+        var normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+
+        var color = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color);
+        gl.bufferData(gl.ARRAY_BUFFER, colorData, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribDivisor(3, 1);
+        gl.enableVertexAttribArray(3);
+
+        // Columns of matrix as separate attributes for instancing
+        var matrixBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, modelMatrixData, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 64, 0);
+        gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 64, 16);
+        gl.vertexAttribPointer(6, 4, gl.FLOAT, false, 64, 32);
+        gl.vertexAttribPointer(7, 4, gl.FLOAT, false, 64, 48);
+
+        gl.vertexAttribDivisor(4, 1);
+        gl.vertexAttribDivisor(5, 1);
+        gl.vertexAttribDivisor(6, 1);
+        gl.vertexAttribDivisor(7, 1);
+
+        gl.enableVertexAttribArray(4);
+        gl.enableVertexAttribArray(5);
+        gl.enableVertexAttribArray(6);
+        gl.enableVertexAttribArray(7);
+
+        var indices = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
+
+        // Quad for draw pass
+        var quadArray = gl.createVertexArray();
+        gl.bindVertexArray(quadArray);
+
+        var quadPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, 1,
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ]), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        //////////////////////
+        // SET UP UNIFORMS
+        //////////////////////
+
+        var projMatrix = mat4.create();
+        mat4.perspective(projMatrix, Math.PI / 2, canvas.width / canvas.height, 0.1, 10.0);
+
+        var viewMatrix = mat4.create();
+        var eyePosition = vec3.fromValues(0, 0.8, 2);
+        mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+
+        var viewProjMatrix = mat4.create();
+        mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
+
+        var lightPosition = vec3.fromValues(1, 1, 2);
+        
+        var sceneUniformData = new Float32Array(24);
+        sceneUniformData.set(viewProjMatrix);
+        sceneUniformData.set(eyePosition, 16);
+        sceneUniformData.set(lightPosition, 20);
+
+        var sceneUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
+        var image = new Image();
+
+        image.onload = function() {
+
+            ///////////////////////
+            // BIND TEXTURES
+            ///////////////////////
+
+            var texture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, accumTarget);
+
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, accumAlphaTarget);
+
+            gl.useProgram(accumProgram);
+            gl.uniform1i(textureLocation, 0);
+
+            gl.useProgram(drawProgram);
+            gl.uniform1i(accumLocation, 1);
+            gl.uniform1i(accumAlphaLocation, 2);
+
+            var rotationMatrix = mat4.create();
+
+            function draw() {
+
+                ////////////////////
+                // DRAW BOXES
+                ////////////////////
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, accumBuffer);
+                gl.useProgram(accumProgram);
+                gl.bindVertexArray(sphereArray);
+
+                for (var i = 0, len = spheres.length; i < len; ++i) {
+                    spheres[i].rotate[1] += 0.002;
+
+                    utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
+                    mat4.fromYRotation(rotationMatrix, spheres[i].rotate[1]);
+                    mat4.multiply(spheres[i].modelMatrix, rotationMatrix, spheres[i].modelMatrix);
+                
+                    modelMatrixData.set(spheres[i].modelMatrix, i * 16);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, modelMatrixData);
+                gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE_MINUS_SRC_ALPHA)
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.drawElementsInstanced(gl.TRIANGLES, sphere.indices.length, gl.UNSIGNED_SHORT, 0, spheres.length);
+
+
+                /////////
+                // DRAW
+                /////////
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.useProgram(drawProgram);
+                gl.bindVertexArray(quadArray);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);                
+
+                requestAnimationFrame(draw);
+            }
+
+            requestAnimationFrame(draw);
+            
+        }
+
+        image.src = "img/khronos_webgl.png";
+
+    </script>
+    <a href="https://github.com/tsherif/webgl2examples" id="github-ribbon"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+</body>
+</html>
