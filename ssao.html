@@ -111,10 +111,6 @@
         layout(location=1) out vec4 viewPosition;
         layout(location=2) out vec4 viewNormal;
 
-        float weight(float z, float a) {
-            return clamp(pow(min(1.0, a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - z * 0.9, 3.0), 1e-2, 3e3);
-        }
-
         void main() {
             vec3 position = vPosition.xyz;
             vec3 normal = normalize(vNormal.xyz);
@@ -138,10 +134,10 @@
     <script type="x-shader/vs" id="vertex-quad">
         #version 300 es
 
-        layout(location=0) in vec4 aPosition;
+        layout(location=0) in vec4 position;
         
         void main() {
-            gl_Position = aPosition;
+            gl_Position = position;
         }
     </script>
 
@@ -149,12 +145,17 @@
         #version 300 es
         precision highp float;
 
+        layout(std140, column_major) uniform;
+
         #define SIN45 0.707107
 
-        uniform float uSampleRadius;
-        uniform float uBias;
-        uniform vec2 uAttenuation;
-        uniform vec2 uDepthRange;
+        uniform SSAOUniforms {
+            float uSampleRadius;
+            float uBias;
+            vec2 uAttenuation;
+            vec2 uDepthRange;
+        };
+
         uniform sampler2D uPositionBuffer;
         uniform sampler2D uNormalBuffer;
         uniform sampler2D uNoiseBuffer;
@@ -402,10 +403,9 @@
         var modelMatrixLocation = gl.getUniformLocation(colorGeoProgram, "uModel");
         var textureLocation = gl.getUniformLocation(colorGeoProgram, "uTexture");
 
-        var sampleRadiusLocation = gl.getUniformLocation(ssaoProgram, "uSampleRadius");
-        var biasLocation = gl.getUniformLocation(ssaoProgram, "uBias");
-        var attenuationLocation = gl.getUniformLocation(ssaoProgram, "uAttenuation");
-        var depthRangeLocation = gl.getUniformLocation(ssaoProgram, "uDepthRange");
+        var ssaoUniformsLocation = gl.getUniformBlockIndex(ssaoProgram, "SSAOUniforms");
+        gl.uniformBlockBinding(ssaoProgram, ssaoUniformsLocation, 1);
+
         var positionBufferLocation = gl.getUniformLocation(ssaoProgram, "uPositionBuffer");
         var normalBufferLocation = gl.getUniformLocation(ssaoProgram, "uNormalBuffer");
         var noiseBufferLocation = gl.getUniformLocation(ssaoProgram, "uNoiseBuffer");
@@ -535,7 +535,7 @@
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
 
-        // Quad for draw pass
+        // Quad for screen-space passes
         var quadArray = gl.createVertexArray();
         gl.bindVertexArray(quadArray);
 
@@ -578,6 +578,17 @@
         gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
+        var ssaoUniformData = new Float32Array(8);
+        ssaoUniformData[0] = 16.0; // sample radius
+        ssaoUniformData[1] = 0.01; // bias
+        ssaoUniformData.set(vec2.fromValues(1, 1), 2); // attenuation
+        ssaoUniformData.set(depthRange, 4);
+
+        var ssaoUniformBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, ssaoUniformBuffer);
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, ssaoUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, ssaoUniformData, gl.STATIC_DRAW);
 
         var image = new Image();
 
@@ -626,10 +637,6 @@
             gl.uniform1i(textureLocation, 0);
 
             gl.useProgram(ssaoProgram);
-            gl.uniform1f(sampleRadiusLocation, 16.0);
-            gl.uniform1f(biasLocation, 0.01);
-            gl.uniform2fv(attenuationLocation, vec2.fromValues(1, 1));
-            gl.uniform2fv(depthRangeLocation, depthRange);
             gl.uniform1i(positionBufferLocation, 3);
             gl.uniform1i(normalBufferLocation, 4);
             gl.uniform1i(noiseBufferLocation, 1);
