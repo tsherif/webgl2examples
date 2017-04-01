@@ -294,7 +294,7 @@
         var depthRange = vec2.fromValues(NEAR, FAR);
 
         /////////////////////////
-        // ACCUMULATION PROGRAM
+        // COLOR/GEO PROGRAM
         /////////////////////////
 
         var colorgeoVsSource =  document.getElementById("vertex-colorgeo").text.trim();
@@ -366,6 +366,7 @@
             console.error(gl.getShaderInfoLog(noSSAOFragmentShader));
         }
 
+        // Calculate occlusion
         var ssaoProgram = gl.createProgram();
         gl.attachShader(ssaoProgram, quadVertexShader);
         gl.attachShader(ssaoProgram, ssaoFragmentShader);
@@ -375,6 +376,7 @@
             console.error(gl.getProgramInfoLog(ssaoProgram));
         }
 
+        // Blend color/occlusion
         var aoBlendProgram = gl.createProgram();
         gl.attachShader(aoBlendProgram, quadVertexShader);
         gl.attachShader(aoBlendProgram, aoBlendFragmentShader);
@@ -384,6 +386,7 @@
             console.error(gl.getProgramInfoLog(aoBlendProgram));
         }
 
+        // SSAO disabled
         var noSSAOProgram = gl.createProgram();
         gl.attachShader(noSSAOProgram, quadVertexShader);
         gl.attachShader(noSSAOProgram, noSSAOFragmentShader);
@@ -581,7 +584,7 @@
 
         var ssaoUniformData = new Float32Array(8);
         ssaoUniformData[0] = 16.0; // sample radius
-        ssaoUniformData[1] = 0.03; // bias
+        ssaoUniformData[1] = 0.04; // bias
         ssaoUniformData.set(vec2.fromValues(1, 1), 2); // attenuation
         ssaoUniformData.set(depthRange, 4);
 
@@ -694,6 +697,10 @@
                     gl.useProgram(aoBlendProgram);
                     gl.drawArrays(gl.TRIANGLES, 0, 6);
                 } else {
+                    ///////////////////////
+                    // DRAW W/O OCCLUSION
+                    ///////////////////////
+
                     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                     gl.useProgram(noSSAOProgram);
                     gl.drawArrays(gl.TRIANGLES, 0, 6);
