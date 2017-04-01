@@ -581,7 +581,7 @@
 
         var ssaoUniformData = new Float32Array(8);
         ssaoUniformData[0] = 16.0; // sample radius
-        ssaoUniformData[1] = 0.01; // bias
+        ssaoUniformData[1] = 0.03; // bias
         ssaoUniformData.set(vec2.fromValues(1, 1), 2); // attenuation
         ssaoUniformData.set(depthRange, 4);
 
