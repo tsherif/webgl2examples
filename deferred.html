@@ -388,7 +388,6 @@
 
         var matrixUniformData = new Float32Array(32);
         var matrixUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, matrixUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, matrixUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, 128, gl.DYNAMIC_DRAW);
 
@@ -427,7 +426,6 @@
             lights[i].uniformData.set(lights[i].position, 16);
             lights[i].uniformData.set(lights[i].color, 20);
 
-            gl.bindBuffer(gl.UNIFORM_BUFFER, lights[i].uniformBuffer);
             gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, lights[i].uniformBuffer);        
             gl.bufferData(gl.UNIFORM_BUFFER, lights[i].uniformData, gl.STATIC_DRAW);
         }
@@ -495,7 +493,6 @@
                     matrixUniformData.set(boxes[i].modelMatrix);
                     matrixUniformData.set(boxes[i].mvpMatrix, 16);
 
-                    gl.bindBuffer(gl.UNIFORM_BUFFER, matrixUniformBuffer);
                     gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, matrixUniformBuffer);
                     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, matrixUniformData);
 
@@ -516,7 +513,6 @@
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (var i = 0, len = lights.length; i < len; ++i) {
-                    gl.bindBuffer(gl.UNIFORM_BUFFER, lights[i].uniformBuffer);
                     gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, lights[i].uniformBuffer);
                     gl.drawElements(gl.TRIANGLES, numSphereElements, gl.UNSIGNED_SHORT, 0);
                 }

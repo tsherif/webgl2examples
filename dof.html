@@ -446,7 +446,6 @@
         sceneUniformData.set(lightPosition, 20);
 
         var sceneUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
@@ -458,7 +457,6 @@
         dofUniformData.set(resolution, 6); 
 
         var dofUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, dofUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, dofUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, dofUniformData, gl.STATIC_DRAW);
 
@@ -529,7 +527,6 @@
                 gl.bindFramebuffer(gl.FRAMEBUFFER, hblurBuffer);
                 gl.useProgram(blurProgram);
                 gl.bindVertexArray(quadArray);
-                gl.bindBuffer(gl.UNIFORM_BUFFER, dofUniformBuffer);
                 gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, dofUniformBuffer);
 
                 gl.uniform1i(textureLocation, 1);

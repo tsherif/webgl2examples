@@ -422,7 +422,6 @@
         sceneUniformData.set(lightPosition, 20);
 
         var sceneUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 

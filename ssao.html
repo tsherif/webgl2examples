@@ -578,7 +578,6 @@
         sceneUniformData.set(lightPosition, 36);
 
         var sceneUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, sceneUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
@@ -589,7 +588,6 @@
         ssaoUniformData.set(depthRange, 4);
 
         var ssaoUniformBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.UNIFORM_BUFFER, ssaoUniformBuffer);
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, ssaoUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, ssaoUniformData, gl.STATIC_DRAW);
 
