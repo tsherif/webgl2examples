@@ -38,13 +38,14 @@
         </div>
     </div>
     <canvas id="gl-canvas"></canvas>
-    <script id="update-vs" type="x-shader/vs">
+    <script id="main-vs" type="x-shader/vs">
         #version 300 es
 
         layout(std140) uniform;
 
         layout(location=0) in vec3 aPosition;
         layout(location=1) in vec3 aVelocity;
+        layout(location=2) in vec3 aColor;
 
         uniform Mass {
             float mass1Factor;
@@ -57,6 +58,7 @@
     
         out vec3 vPosition;
         out vec3 vVelocity;
+        out vec3 vColor;
         void main() {
             vec3 position = aPosition;
             vec3 velocity = aVelocity;
@@ -78,28 +80,10 @@
 
             vPosition = position + velocity;
             vVelocity = velocity;
-        }
-    </script>
-    <script id="update-fs" type="x-fragment-shader">
-        #version 300 es
-        precision highp float;
 
-        void main() {
-            
-        }
-    </script>
-    <script id="main-vs" type="x-vertex-shader">
-        #version 300 es
-
-        layout(location=0) in vec4 position;
-        layout(location=2) in vec3 aColor;
-        
-        out vec3 vColor;
-
-        void main() {
             vColor = aColor;
             gl_PointSize = 2.0;
-            gl_Position = position;
+            gl_Position = vec4(position, 1.0);
         }
     </script>
     <script id="main-fs" type="x-fragment-shader">
@@ -130,76 +114,47 @@
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
         ///////////////////////////
-        // PARTICLE UPDATE PROGRAM
+        // SET UP PROGRAM
         ///////////////////////////
 
-        var updateVsSource = document.getElementById("update-vs").text.trim();
-        var updateFsSource = document.getElementById("update-fs").text.trim();
+        var vsSource = document.getElementById("main-vs").text.trim();
+        var fsSource = document.getElementById("main-fs").text.trim();
         
-        var updateVertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(updateVertexShader, updateVsSource);
-        gl.compileShader(updateVertexShader);
+        var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vsSource);
+        gl.compileShader(vertexShader);
 
-        if (!gl.getShaderParameter(updateVertexShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(updateVertexShader));
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(vertexShader));
         }
 
-        var updateFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(updateFragmentShader, updateFsSource);
-        gl.compileShader(updateFragmentShader);
+        var fragment = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragment, fsSource);
+        gl.compileShader(fragment);
 
-        if (!gl.getShaderParameter(updateFragmentShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(updateFragmentShader));
+        if (!gl.getShaderParameter(fragment, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(fragment));
         }
 
-        var updateProgram = gl.createProgram();
-        gl.attachShader(updateProgram, updateVertexShader);
-        gl.attachShader(updateProgram, updateFragmentShader);
-        gl.transformFeedbackVaryings(updateProgram, ["vPosition", "vVelocity"], gl.SEPARATE_ATTRIBS);
-        gl.linkProgram(updateProgram);
+        var program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragment);
+        gl.transformFeedbackVaryings(program, ["vPosition", "vVelocity"], gl.SEPARATE_ATTRIBS);
+        gl.linkProgram(program);
 
-        if (!gl.getProgramParameter(updateProgram, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(updateProgram));
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
         }
+
+        gl.useProgram(program);
 
         ///////////////////////////////////////////
-        // GET UPDATE PROGRAM UNIFORM LOCATIONS
+        // GET UNIFORM LOCATIONS
         ///////////////////////////////////////////
 
-        var massUniformsLocation = gl.getUniformBlockIndex(updateProgram, "Mass");
-        gl.uniformBlockBinding(updateProgram, massUniformsLocation, 0);
+        var massUniformsLocation = gl.getUniformBlockIndex(program, "Mass");
+        gl.uniformBlockBinding(program, massUniformsLocation, 0);
 
-        ///////////////////////////
-        // MAIN PROGRAM
-        ///////////////////////////
-
-        var mainVsSource = document.getElementById("main-vs").text.trim();
-        var mainFsSource = document.getElementById("main-fs").text.trim();
-        
-        var mainVertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(mainVertexShader, mainVsSource);
-        gl.compileShader(mainVertexShader);
-
-        if (!gl.getShaderParameter(mainVertexShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(mainVertexShader));
-        }
-
-        var mainFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(mainFragmentShader, mainFsSource);
-        gl.compileShader(mainFragmentShader);
-
-        if (!gl.getShaderParameter(mainFragmentShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(mainFragmentShader));
-        }
-
-        var mainProgram = gl.createProgram();
-        gl.attachShader(mainProgram, mainVertexShader);
-        gl.attachShader(mainProgram, mainFragmentShader);
-        gl.linkProgram(mainProgram);
-
-        if (!gl.getProgramParameter(mainProgram, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(mainProgram));
-        }
 
         //////////////////////////
         // SET UP GEOMETRY
@@ -312,30 +267,19 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             //////////////////////////////
-            // TRANSFORM FEEDBACK PASS
+            // DRAW
             //////////////////////////////
 
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
-            gl.useProgram(updateProgram);
             gl.bindVertexArray(readVertexArray);
 
             gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, writePositionBuffer);
             gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, writeVelocityBuffer);
 
-            gl.enable(gl.RASTERIZER_DISCARD);
             gl.beginTransformFeedback(gl.POINTS);
             gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
             gl.endTransformFeedback();
-            gl.disable(gl.RASTERIZER_DISCARD);
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
-            
-            //////////////
-            // DRAW PASS
-            //////////////
-
-            gl.useProgram(mainProgram);
-            gl.bindVertexArray(writeVertexArray);
-            gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
 
             //////////////////
             // SWAP BUFFERS
