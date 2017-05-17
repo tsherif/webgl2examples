@@ -32,7 +32,7 @@
     <div id="example-title">
         <header>WebGL 2 Example: Phong-shaded Cube</header>
         <div id="features">
-            Features: Vertex Arrays, Uniform Buffers
+            Features: Vertex Arrays, Uniform Buffers, Immutable Textures
         </div>
         <div>
             <a href="https://github.com/tsherif/webgl2examples/blob/master/cube.html">Source code</a>
@@ -230,7 +230,10 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+            var levels = levels = Math.floor(Math.log2(Math.max(this.width, this.height))) + 1;
+            gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, image.width, image.height);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
 
             gl.uniform1i(texLocation, 0);
