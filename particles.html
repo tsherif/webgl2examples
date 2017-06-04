@@ -177,6 +177,11 @@
             colorData[vec3i + 2] = Math.random();
         }
 
+        //////////////////////////////////////
+        // SET UP TRANSFORM FEEDBACK
+        //////////////////////////////////////
+
+        // Vertex array handles input
         var vertexArrayA = gl.createVertexArray();
         gl.bindVertexArray(vertexArrayA);
 
@@ -198,6 +203,15 @@
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        // Transform feedback handles output
+        var transformFeedbackA = gl.createTransformFeedback();
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedbackA);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, positionBufferA);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, velocityBufferA);
+
+        // Vertex array handles input
         var vertexArrayB = gl.createVertexArray();
         gl.bindVertexArray(vertexArrayB);
 
@@ -217,15 +231,19 @@
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        // Transform feedback handles output
+        var transformFeedbackB = gl.createTransformFeedback();
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedbackB);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, positionBufferB);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, velocityBufferB);
+
         gl.bindVertexArray(null);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
-        var readVertexArray = vertexArrayA;
-        var readPositionBuffer = positionBufferA;
-        var readVelocityBuffer = velocityBufferA;
-
-        var writeVertexArray = vertexArrayB;
-        var writePositionBuffer = positionBufferB;
-        var writeVelocityBuffer = velocityBufferB;
+        var currentVertexArray = vertexArrayA;
+        var currentTransformFeedback = transformFeedbackB;
         
         ///////////////////
         // UNIFORM DATA
@@ -259,8 +277,6 @@
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, massUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, massUniformData, gl.STATIC_DRAW);
 
-        var transformFeedback = gl.createTransformFeedback();
-
         function draw() {
             // NOTE(Tarek): Putting the clear after the transform feedback
             // pass seems to cause it to be ignored on OSX 10.12/Intel Iris
@@ -270,35 +286,23 @@
             // DRAW
             //////////////////////////////
 
-            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
-            gl.bindVertexArray(readVertexArray);
-
-            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, writePositionBuffer);
-            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, writeVelocityBuffer);
+            gl.bindVertexArray(currentVertexArray);
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, currentTransformFeedback);
 
             gl.beginTransformFeedback(gl.POINTS);
             gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
             gl.endTransformFeedback();
-            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
             //////////////////
             // SWAP BUFFERS
             //////////////////
 
-            if (readVertexArray === vertexArrayA) {
-                readVertexArray = vertexArrayB;
-                readPositionBuffer = positionBufferB;
-                readVelocityBuffer = velocityBufferB;
-                writeVertexArray = vertexArrayA;
-                writePositionBuffer = positionBufferA;
-                writeVelocityBuffer = velocityBufferA;
+            if (currentVertexArray === vertexArrayA) {
+                currentVertexArray = vertexArrayB;
+                currentTransformFeedback = transformFeedbackA;
             } else {
-                readVertexArray = vertexArrayA;
-                readPositionBuffer = positionBufferA;
-                readVelocityBuffer = velocityBufferA;
-                writeVertexArray = vertexArrayB;
-                writePositionBuffer = positionBufferB;
-                writeVelocityBuffer = velocityBufferB;
+                currentVertexArray = vertexArrayA;
+                currentTransformFeedback = transformFeedbackB;
             }
 
             requestAnimationFrame(draw);
