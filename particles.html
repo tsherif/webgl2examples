@@ -289,6 +289,16 @@
             gl.bindVertexArray(currentVertexArray);
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, currentTransformFeedback);
 
+            // NOTE: THIS PART IS NECESSARY DUE TO A BUG IN ANGLE'S HANDLING 
+            // OF TRANFORM FEEDBACK OBJECTS
+            if (currentTransformFeedback === transformFeedbackA) {
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, positionBufferA);
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, velocityBufferA);
+            } else {
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, positionBufferB);
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, velocityBufferB);
+            }
+
             gl.beginTransformFeedback(gl.POINTS);
             gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
             gl.endTransformFeedback();
