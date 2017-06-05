@@ -290,7 +290,8 @@
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, currentTransformFeedback);
 
             // NOTE: THIS PART IS NECESSARY DUE TO A BUG IN ANGLE'S HANDLING 
-            // OF TRANFORM FEEDBACK OBJECTS
+            // OF TRANFORM FEEDBACK OBJECTS.
+            // TO BE REMOVED WHEN THAT'S FIXED.
             if (currentTransformFeedback === transformFeedbackA) {
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, positionBufferA);
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, velocityBufferA);
