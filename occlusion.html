@@ -113,7 +113,38 @@
             fragColor = vec4(color * (diffuse + highlight + ambient), 1.0);
         }
     </script>
-        <script type="text/javascript">
+    <script type="x-shader/vs" id="vertex-bbox">
+        #version 300 es
+
+        layout(std140, column_major) uniform;
+        
+        layout(location=0) in vec4 position;
+        
+        uniform SceneUniforms {
+            mat4 viewProj;
+            vec4 eyePosition;
+            vec4 lightPosition;
+        } uScene;       
+        
+        uniform mat4 uModel;
+
+        void main() {
+            gl_Position = uScene.viewProj * uModel * position;
+        }
+    </script>
+    <script type="x-shader/vf" id="fragment-bbox">
+        #version 300 es
+        precision highp float;
+
+        layout(std140, column_major) uniform;
+
+        out vec4 fragColor;
+
+        void main() {
+            fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+        }
+    </script>
+    <script type="text/javascript">
         var canvas = document.getElementById("gl-canvas");
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -160,6 +191,36 @@
             console.error(gl.getProgramInfoLog(program));
         }
 
+
+
+        var vsSourceBBox =  document.getElementById("vertex-bbox").text.trim();
+        var fsSourceBBox =  document.getElementById("fragment-bbox").text.trim();
+
+        var vertexShaderBBox = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShaderBBox, vsSourceBBox);
+        gl.compileShader(vertexShaderBBox);
+
+        if (!gl.getShaderParameter(vertexShaderBBox, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(vertexShaderBBox));
+        }
+
+        var fragmentShaderBBox = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShaderBBox, fsSourceBBox);
+        gl.compileShader(fragmentShaderBBox);
+
+        if (!gl.getShaderParameter(fragmentShaderBBox, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(fragmentShaderBBox));
+        }
+
+        var programBBox = gl.createProgram();
+        gl.attachShader(programBBox, vertexShaderBBox);
+        gl.attachShader(programBBox, fragmentShaderBBox);
+        gl.linkProgram(programBBox);
+
+        if (!gl.getProgramParameter(programBBox, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(programBBox));
+        }
+
         /////////////////////////
         // GET UNIFORM LOCATIONS
         /////////////////////////
@@ -170,38 +231,99 @@
         var modelMatrixLocation = gl.getUniformLocation(program, "uModel");
         var texLocation = gl.getUniformLocation(program, "tex");
 
-        gl.useProgram(program);
+        // gl.useProgram(program);
+
+
+        var sceneUniformsLocationBBox = gl.getUniformBlockIndex(programBBox, "SceneUniforms");
+        gl.uniformBlockBinding(programBBox, sceneUniformsLocationBBox, 0);
+
+        var modelMatrixLocationBBox = gl.getUniformLocation(programBBox, "uModel");
 
         /////////////////////
         // SET UP GEOMETRY & scene
         /////////////////////
 
-        var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
-        // var numVertices = box.positions.length / 3;
+        var positionBuffer, uvBuffer, normalBuffer, indices;
 
-        var cubeArray = gl.createVertexArray();
-        gl.bindVertexArray(cubeArray);
+        // var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
+        // // var numVertices = box.positions.length / 3;
 
-        var positionBuffer = gl.createBuffer();
+        // var cubeArray = gl.createVertexArray();
+        // gl.bindVertexArray(cubeArray);
+
+        // var positionBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(0);
+
+        // var uvBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(1);
+
+        // var normalBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(2);
+
+        // gl.bindVertexArray(null);
+
+        // sphere high poly
+
+        var sphereHigh = utils.createSphere({
+            long_bands: 96,
+            lat_bands: 96,
+            radius: 0.6
+        });
+
+        var sphereHighArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereHighArray);
+
+        positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.positions, gl.STATIC_DRAW);
         gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(0);
 
-        var uvBuffer = gl.createBuffer();
+        uvBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.uvs, gl.STATIC_DRAW);
         gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(1);
 
-        var normalBuffer = gl.createBuffer();
+        normalBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.normals, gl.STATIC_DRAW);
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
+        indices = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphereHigh.indices, gl.STATIC_DRAW);
+
         gl.bindVertexArray(null);
 
+
+
+        sphereHigh.bbox = utils.computeBoundingBox(sphereHigh.positions, {geo: true});
+
+        var sphereHighBBoxArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereHighBBoxArray);
+
+        positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.bbox.bbox.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        gl.bindVertexArray(null);
+
+
+
+        // sphere low poly
 
         var sphere = utils.createSphere({
             long_bands: 16,
@@ -209,35 +331,52 @@
             radius: 0.5
         });
 
-        sphere.bbox = utils.computeBoundingBox(sphere.positions, {geo: true});
         // var numVertices = sphere.positions.length / 3;
 
         var sphereArray = gl.createVertexArray();
         gl.bindVertexArray(sphereArray);
 
-        var positionBuffer = gl.createBuffer();
+        positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, sphere.positions, gl.STATIC_DRAW);
         gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(0);
 
-        var uvBuffer = gl.createBuffer();
+        uvBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, sphere.uvs, gl.STATIC_DRAW);
         gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(1);
 
-        var normalBuffer = gl.createBuffer();
+        normalBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, sphere.normals, gl.STATIC_DRAW);
         gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(2);
 
-        var indices = gl.createBuffer();
+        indices = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
 
         gl.bindVertexArray(null);
+
+
+
+        sphere.bbox = utils.computeBoundingBox(sphere.positions, {geo: true});
+
+        var sphereBBoxArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereBBoxArray);
+
+        positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.bbox.bbox.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        gl.bindVertexArray(null);
+
+
+
 
         var NUM_NODES = 32;
         var NUM_PER_ROW = 8;
@@ -251,7 +390,7 @@
             var z = Math.cos(angle) * RADIUS;
 
             if (i % 2 == 0) {
-                // sphere
+                // sphere low
                 nodes[i] = {
                     scale: [0.8, 0.8, 0.8],
                     rotate: [0, 0, 0], // Will be used for global rotation
@@ -259,20 +398,42 @@
                     modelMatrix: mat4.create(),
 
                     vao: sphereArray,
-                    indicesLength: sphere.indices.length
+                    indicesLength: sphere.indices.length,
+
+                    bbox: sphere.bbox,
+                    vaobbox: sphereBBoxArray,
+                    bboxNumVertices: sphere.bbox.bbox.positions.length / 3
                 };
             } else {
-                // cube
+                // // cube
+                // nodes[i] = {
+                //     scale: [0.4, 0.4, 0.4],
+                //     rotate: [0, 0, 0], // Will be used for global rotation
+                //     translate: [x, y, z],
+                //     modelMatrix: mat4.create(),
+
+                //     vao: cubeArray,
+                //     numVertices: box.positions.length / 3
+                // }
+
+                // sphere high
                 nodes[i] = {
-                    scale: [0.4, 0.4, 0.4],
+                    scale: [0.8, 0.8, 0.8],
                     rotate: [0, 0, 0], // Will be used for global rotation
                     translate: [x, y, z],
                     modelMatrix: mat4.create(),
 
-                    vao: cubeArray,
-                    numVertices: box.positions.length / 3
-                }
+                    vao: sphereHighArray,
+                    indicesLength: sphereHigh.indices.length,
+
+                    bbox: sphereHigh.bbox,
+                    vaobbox: sphereHighBBoxArray,
+                    bboxNumVertices: sphereHigh.bbox.bbox.positions.length / 3
+                };
             }
+
+            // query object
+            nodes[i].query = gl.createQuery();
             
         }
 
@@ -328,10 +489,11 @@
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
 
+            gl.useProgram(program);
             gl.uniform1i(texLocation, 0);
 
             var rotationMatrix = mat4.create();
-            var node;
+            var node, bbox;
 
             function draw() {
                 // angleX += 0.01;
@@ -350,22 +512,52 @@
 
                 for (var i = 0, len = nodes.length; i < len; ++i) {
                     node = nodes[i];
-                    gl.bindVertexArray(node.vao);
+                    bbox = node.bbox;
 
                     node.rotate[1] += 0.002;
 
                     utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
                     mat4.fromYRotation(rotationMatrix, node.rotate[1]);
                     mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
-                
-                    gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
-                    // modelMatrixData.set(node.modelMatrix, i * 16);
 
-                    if (node.indicesLength) {
-                        gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
-                    } else {
-                        gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                    
+
+                    // use occlusion query with drawing bounding box
+                    // gl.colorMask(false, false, false, false);
+                    // gl.depthMask(false);
+                    gl.useProgram(programBBox);
+                    gl.bindVertexArray(node.vaobbox);
+
+                    gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
+                    
+                    gl.beginQuery(gl.ANY_SAMPLES_PASSED, node.query);
+                    gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
+                    gl.endQuery(gl.ANY_SAMPLES_PASSED);
+
+                    if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
+                        // A query's result is never available in the same frame
+                        // the query was issued.  Try in the next frame.
+                        var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
+
+                        if (samplesPassed == 0) {
+                            console.log('invisible node ' + i);
+                            continue;
+                        }
                     }
+
+                    // gl.colorMask(true, true, true, true);
+                    // gl.depthMask(true);
+                    // gl.useProgram(program);
+                    // gl.bindVertexArray(node.vao);
+
+                    // gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                    // // modelMatrixData.set(node.modelMatrix, i * 16);
+
+                    // if (node.indicesLength) {
+                    //     gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                    // } else {
+                    //     gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                    // }
                     
                 }
                 
