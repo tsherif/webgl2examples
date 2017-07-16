@@ -144,6 +144,35 @@
             fragColor = vec4(1.0, 1.0, 1.0, 1.0);
         }
     </script>
+    <script type="x-shader/vs" id="vertex-assist-cam">
+        #version 300 es
+
+        layout(std140, column_major) uniform;
+        
+        layout(location=0) in vec4 position;
+        layout(location=1) in vec2 uv;
+        layout(location=2) in vec4 normal;
+        
+        uniform mat4 uViewProj;
+        
+        uniform mat4 uModel;
+
+        void main() {
+            gl_Position = uViewProj * uModel * position;
+        }
+    </script>
+    <script type="x-shader/vf" id="fragment-assist-cam">
+        #version 300 es
+        precision highp float;
+
+        layout(std140, column_major) uniform;
+
+        out vec4 fragColor;
+
+        void main() {
+            fragColor = vec4(1.0, 0.0, 0.0, 0.2);
+        }
+    </script>
     <script type="text/javascript">
         var canvas = document.getElementById("gl-canvas");
         canvas.width = window.innerWidth;
@@ -154,6 +183,14 @@
             console.error("WebGL 2 not available");
             document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
         }
+
+        var assistCamViewport = [
+            0, 
+            0,
+            gl.drawingBufferWidth / 5, 
+            gl.drawingBufferHeight / 5
+        ];
+
 
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clearColor(0.0, 0.0, 0.0, 1.0)
@@ -221,6 +258,36 @@
             console.error(gl.getProgramInfoLog(programBBox));
         }
 
+
+
+        var vsSourceAssistCam =  document.getElementById("vertex-assist-cam").text.trim();
+        var fsSourceAssistCam =  document.getElementById("fragment-assist-cam").text.trim();
+
+        var vertexShaderAssistCam = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShaderAssistCam, vsSourceAssistCam);
+        gl.compileShader(vertexShaderAssistCam);
+
+        if (!gl.getShaderParameter(vertexShaderAssistCam, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(vertexShaderAssistCam));
+        }
+
+        var fragmentShaderAssistCam = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShaderAssistCam, fsSourceAssistCam);
+        gl.compileShader(fragmentShaderAssistCam);
+
+        if (!gl.getShaderParameter(fragmentShaderAssistCam, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(fragmentShaderAssistCam));
+        }
+
+        var programAssistCam = gl.createProgram();
+        gl.attachShader(programAssistCam, vertexShaderAssistCam);
+        gl.attachShader(programAssistCam, fragmentShaderAssistCam);
+        gl.linkProgram(programAssistCam);
+
+        if (!gl.getProgramParameter(programAssistCam, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(programAssistCam));
+        }
+
         /////////////////////////
         // GET UNIFORM LOCATIONS
         /////////////////////////
@@ -231,45 +298,19 @@
         var modelMatrixLocation = gl.getUniformLocation(program, "uModel");
         var texLocation = gl.getUniformLocation(program, "tex");
 
-        // gl.useProgram(program);
-
-
         var sceneUniformsLocationBBox = gl.getUniformBlockIndex(programBBox, "SceneUniforms");
         gl.uniformBlockBinding(programBBox, sceneUniformsLocationBBox, 0);
 
         var modelMatrixLocationBBox = gl.getUniformLocation(programBBox, "uModel");
+
+        var viewProjMatrixLocationAssistCam = gl.getUniformLocation(programAssistCam, "uViewProj");
+        var modelMatrixLocationAssistCam = gl.getUniformLocation(programAssistCam, "uModel");
 
         /////////////////////
         // SET UP GEOMETRY & scene
         /////////////////////
 
         var positionBuffer, uvBuffer, normalBuffer, indices;
-
-        // var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
-        // // var numVertices = box.positions.length / 3;
-
-        // var cubeArray = gl.createVertexArray();
-        // gl.bindVertexArray(cubeArray);
-
-        // var positionBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(0);
-
-        // var uvBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(1);
-
-        // var normalBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(2);
-
-        // gl.bindVertexArray(null);
 
         // sphere high poly
 
@@ -376,8 +417,6 @@
         gl.bindVertexArray(null);
 
 
-
-
         var NUM_NODES = 32;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
@@ -441,6 +480,7 @@
         // UNIFORM DATA
         //////////////////////////
 
+        // scene main camera
         var projMatrix = mat4.create();
         mat4.perspective(projMatrix, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
@@ -452,7 +492,25 @@
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-        // var lightPosition = vec3.fromValues(1, 1, 0.5);
+
+        // top down assist camera
+        var projMatrixAssistCam = mat4.create();
+        mat4.perspective(projMatrixAssistCam, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
+
+        var viewMatrixAssistCam = mat4.create();
+        var eyePositionAssistCam = vec3.fromValues(0, 3, 0);
+        // var eyePositionAssistCam = vec3.fromValues(0, 0.8, 2);
+        mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 0, -1));
+        // mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+
+        var viewProjMatrixAssistCam = mat4.create();
+        mat4.multiply(viewProjMatrixAssistCam, projMatrixAssistCam, viewMatrixAssistCam);
+
+
+        gl.useProgram(programAssistCam);
+        gl.uniformMatrix4fv(viewProjMatrixLocationAssistCam, false, viewProjMatrixAssistCam);
+        gl.useProgram(null);
+
         var lightPosition = vec3.fromValues(1, 1, 2);
 
         var modelMatrix = mat4.create();
@@ -468,8 +526,14 @@
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
 
-        var angleX = 0;
-        var angleY = 0;
+        var assistCamUniformData = new Float32Array(24);
+        assistCamUniformData.set(viewProjMatrixAssistCam);
+        assistCamUniformData.set(eyePositionAssistCam, 16);
+        assistCamUniformData.set(lightPosition, 20);
+
+        var assistCamUniformBuffer = gl.createBuffer();
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, assistCamUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, assistCamUniformData, gl.STATIC_DRAW);
 
         var image = new Image();
         var firstFrame = true;
@@ -492,9 +556,15 @@
 
             gl.useProgram(program);
             gl.uniform1i(texLocation, 0);
+            gl.useProgram(null);
+            
+            gl.blendEquation( gl.FUNC_ADD );
+            gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 
             var rotationMatrix = mat4.create();
             var node, bbox, isVisible = true;
+            var isDrawNodes = new Array(nodes.length);
+            var invisibleNodesCount = 0;
 
             function draw() {
                 // angleX += 0.01;
@@ -508,10 +578,17 @@
 
                 // gl.clear(gl.COLOR_BUFFER_BIT);
                 // gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+                
+                invisibleNodesCount = 0;
 
+                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                gl.clearColor(0, 0, 0, 1);
+                gl.enable(gl.DEPTH_TEST);
                 gl.colorMask(true, true, true, true);
                 gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
 
                 for (var i = 0, len = nodes.length; i < len; ++i) {
                     node = nodes[i];
@@ -528,11 +605,15 @@
                     // use occlusion query with drawing bounding box
                     gl.colorMask(false, false, false, false);
                     gl.depthMask(false);
+                    
                     gl.useProgram(programBBox);
                     gl.bindVertexArray(node.vaobbox);
 
                     gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
                     
+                    isVisible = true;
+                    isDrawNodes[i] = true;
+
                     if (!firstFrame) {
                         if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
                             // A query's result is never available in the same frame
@@ -542,12 +623,14 @@
                             if (samplesPassed == 0) {
                                 // console.log('invisible node ' + i);
                                 isVisible = false;
+                                isDrawNodes[i] = false;
+                                invisibleNodesCount++;
                             }
-                            else
-                            {
-                                // console.log('!!!visible node ' + i);
-                                isVisible = true;
-                            }
+                            // else
+                            // {
+                            //     // console.log('!!!visible node ' + i);
+                            //     visibleNodesCount++;
+                            // }
                         }
                     }
                     
@@ -579,6 +662,43 @@
                 if (firstFrame) {
                     firstFrame = false;
                 }
+
+                // console.log('invisible node count: ' + invisibleNodesCount);
+
+
+                // draw assist camera view
+                gl.uniformBlockBinding(program, sceneUniformsLocation, 1);
+                
+                gl.viewport(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                gl.enable(gl.BLEND);
+                gl.enable(gl.SCISSOR_TEST);
+                gl.scissor(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                gl.colorMask(true, true, true, true);
+                gl.depthMask(true);
+                // gl.disable(gl.DEPTH_TEST);
+                // gl.clearColor(1, 1, 1, 1);
+                gl.clearColor(0.3, 0.3, 0.3, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                // gl.useProgram(programAssistCam);
+                gl.useProgram(program);
+                for (i = 0, len = nodes.length; i < len; ++i) {
+                    if (isDrawNodes[i]) {
+                        // console.log(i);
+                        node = nodes[i];
+                        gl.bindVertexArray(node.vao);
+                        // gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
+                        gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                        if (node.indicesLength) {
+                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                        } else {
+                            gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                        }
+                    }
+                }
+                gl.disable(gl.SCISSOR_TEST);
+                gl.disable(gl.BLEND);
+
+
 
                 requestAnimationFrame(draw);
             }
