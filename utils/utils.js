@@ -335,6 +335,39 @@
             uvs: uvs,
             indices: indices
           };
+        },
+
+        computeBoundingBox: function (position, options) {
+          options = options || {};
+          var geo = options.geo || false;
+
+          var res = {
+            min: vec3.create(),
+            max: vec3.create()
+          };
+          vec3.set(res.min, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+          vec3.set(res.max, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+          for ( var i = 0, len = position.length; i < len; i+=3 ) {
+            res.min[0] = Math.min(position[i], res.min[0]);
+            res.max[0] = Math.max(position[i], res.max[0]);
+            res.min[1] = Math.min(position[i], res.min[1]);
+            res.max[1] = Math.max(position[i], res.max[1]);
+            res.min[2] = Math.min(position[i], res.min[2]);
+            res.max[2] = Math.max(position[i], res.max[2]);
+          }
+
+          if (geo) {
+            var size = vec3.create();
+            vec3.subtract(size, res.max, res.min);
+            res.bbox = utils.createBox({
+              position: res.min,
+              width: size[0],
+              height: size[1],
+              depth: size[2]
+            });
+          }
+
+          return res;
         }
     }
 

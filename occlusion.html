@@ -176,36 +176,41 @@
         // SET UP GEOMETRY & scene
         /////////////////////
 
-        // var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
+        var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
         // var numVertices = box.positions.length / 3;
 
-        // var cubeArray = gl.createVertexArray();
-        // gl.bindVertexArray(cubeArray);
+        var cubeArray = gl.createVertexArray();
+        gl.bindVertexArray(cubeArray);
 
-        // var positionBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(0);
+        var positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
 
-        // var uvBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(1);
+        var uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
 
-        // var normalBuffer = gl.createBuffer();
-        // gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-        // gl.enableVertexAttribArray(2);
+        var normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+        gl.bindVertexArray(null);
+
 
         var sphere = utils.createSphere({
             long_bands: 16,
             lat_bands: 16,
             radius: 0.5
         });
-        var numVertices = sphere.positions.length / 3;
+
+        sphere.bbox = utils.computeBoundingBox(sphere.positions, {geo: true});
+        // var numVertices = sphere.positions.length / 3;
 
         var sphereArray = gl.createVertexArray();
         gl.bindVertexArray(sphereArray);
@@ -234,25 +239,41 @@
 
         gl.bindVertexArray(null);
 
-        var NUM_SPHERES = 32;
+        var NUM_NODES = 32;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
-        var nodes = new Array(NUM_SPHERES);
+        var nodes = new Array(NUM_NODES);
 
-        for (var i = 0; i < NUM_SPHERES; ++i) {
+        for (var i = 0; i < NUM_NODES; ++i) {
             var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
             var x = Math.sin(angle) * RADIUS;
             var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
             var z = Math.cos(angle) * RADIUS;
-            nodes[i] = {
-                scale: [0.8, 0.8, 0.8],
-                rotate: [0, 0, 0], // Will be used for global rotation
-                translate: [x, y, z],
-                modelMatrix: mat4.create(),
 
-                vao: sphereArray,
-                indicesLength: sphere.indices.length
-            };
+            if (i % 2 == 0) {
+                // sphere
+                nodes[i] = {
+                    scale: [0.8, 0.8, 0.8],
+                    rotate: [0, 0, 0], // Will be used for global rotation
+                    translate: [x, y, z],
+                    modelMatrix: mat4.create(),
+
+                    vao: sphereArray,
+                    indicesLength: sphere.indices.length
+                };
+            } else {
+                // cube
+                nodes[i] = {
+                    scale: [0.4, 0.4, 0.4],
+                    rotate: [0, 0, 0], // Will be used for global rotation
+                    translate: [x, y, z],
+                    modelMatrix: mat4.create(),
+
+                    vao: cubeArray,
+                    numVertices: box.positions.length / 3
+                }
+            }
+            
         }
 
         //////////////////////////
@@ -340,7 +361,12 @@
                     gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
                     // modelMatrixData.set(node.modelMatrix, i * 16);
 
-                    gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                    if (node.indicesLength) {
+                        gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                    } else {
+                        gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                    }
+                    
                 }
                 
 
