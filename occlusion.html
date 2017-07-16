@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<!--
+  The MIT License (MIT)
+
+  Copyright (c) 2017 Tarek Sherif
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<!-- 
+    SSAO algorithm from http://www.nutty.ca/?page_id=352&link=ssao
+ -->
+<html>
+<head>
+    <title>WebGL 2 Example: Occlusion culling using occlusion query</title>
+    <script src="utils/gl-matrix.js"></script>
+    <script src="utils/utils.js"></script>
+    <link rel="stylesheet" href="css/webgl2examples.css">
+    <style>
+        #ssao-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="example-title">
+        <header>WebGL 2 Example: Occlusion culling using occlusion query</header>
+        <div id="features">
+            Features: Vertex Arrays, Uniform Buffers, Immutable Textures, Occlusion Query
+        </div>
+        <div>
+            <a href="https://github.com/tsherif/webgl2examples/blob/master/ssao.html">Source code</a>
+        </div>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+    <div id="ssao-controls">
+        Enable Occlusion Culling: <input id="ssao-toggle" type="checkbox" checked>
+    </div>
+    <script type="x-shader/vs" id="vertex-draw">
+        #version 300 es
+
+        layout(std140, column_major) uniform;
+        
+        layout(location=0) in vec4 position;
+        layout(location=1) in vec2 uv;
+        layout(location=2) in vec4 normal;
+        
+        uniform SceneUniforms {
+            mat4 viewProj;
+            vec4 eyePosition;
+            vec4 lightPosition;
+        } uScene;       
+        
+        uniform mat4 uModel;
+
+        out  vec3 vPosition;
+        out  vec2 vUV;
+        flat out  vec3 vNormal;
+        void main() {
+            vec4 worldPosition = uModel * position;
+            vPosition = worldPosition.xyz;
+            vUV = uv;
+            vNormal = (uModel * normal).xyz;
+            gl_Position = uScene.viewProj * worldPosition;
+        }
+    </script>
+    <script type="x-shader/vf" id="fragment-draw">
+        #version 300 es
+        precision highp float;
+
+        layout(std140, column_major) uniform;
+
+        uniform SceneUniforms {
+            mat4 viewProj;
+            vec4 eyePosition;
+            vec4 lightPosition;
+        } uScene;
+
+        uniform sampler2D tex;
+        
+        in vec3 vPosition;
+        in vec2 vUV;
+        flat in vec3 vNormal;
+
+        out vec4 fragColor;
+        void main() {
+            vec3 color = texture(tex, vUV).rgb;
+
+            vec3 normal = normalize(vNormal);
+            vec3 eyeVec = normalize(uScene.eyePosition.xyz - vPosition);
+            vec3 incidentVec = normalize(vPosition - uScene.lightPosition.xyz);
+            vec3 lightVec = -incidentVec;
+            float diffuse = max(dot(lightVec, normal), 0.0);
+            float highlight = pow(max(dot(eyeVec, reflect(incidentVec, normal)), 0.0), 100.0);
+            float ambient = 0.1;
+            fragColor = vec4(color * (diffuse + highlight + ambient), 1.0);
+        }
+    </script>
+        <script type="text/javascript">
+        var canvas = document.getElementById("gl-canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        var gl = canvas.getContext("webgl2");
+        if (!gl) {
+            console.error("WebGL 2 not available");
+            document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
+        }
+
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0)
+        gl.enable(gl.DEPTH_TEST);
+
+        /////////////////////
+        // SET UP PROGRAM
+        /////////////////////
+
+        var vsSource =  document.getElementById("vertex-draw").text.trim();
+        var fsSource =  document.getElementById("fragment-draw").text.trim();
+
+        var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vsSource);
+        gl.compileShader(vertexShader);
+
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(vertexShader));
+        }
+
+        var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, fsSource);
+        gl.compileShader(fragmentShader);
+
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(fragmentShader));
+        }
+
+        var program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
+        }
+
+        /////////////////////////
+        // GET UNIFORM LOCATIONS
+        /////////////////////////
+
+        var sceneUniformsLocation = gl.getUniformBlockIndex(program, "SceneUniforms");
+        gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
+
+        var modelMatrixLocation = gl.getUniformLocation(program, "uModel");
+        var texLocation = gl.getUniformLocation(program, "tex");
+
+        gl.useProgram(program);
+
+        /////////////////////
+        // SET UP GEOMETRY & scene
+        /////////////////////
+
+        // var box = utils.createBox({dimensions: [1.0, 1.0, 1.0]});
+        // var numVertices = box.positions.length / 3;
+
+        // var cubeArray = gl.createVertexArray();
+        // gl.bindVertexArray(cubeArray);
+
+        // var positionBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.positions, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(0);
+
+        // var uvBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.uvs, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(1);
+
+        // var normalBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, box.normals, gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        // gl.enableVertexAttribArray(2);
+
+        var sphere = utils.createSphere({
+            long_bands: 16,
+            lat_bands: 16,
+            radius: 0.5
+        });
+        var numVertices = sphere.positions.length / 3;
+
+        var sphereArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereArray);
+
+        var positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        var uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.uvs, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
+
+        var normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+        var indices = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
+
+        gl.bindVertexArray(null);
+
+        var NUM_SPHERES = 32;
+        var NUM_PER_ROW = 8;
+        var RADIUS = 0.6;
+        var nodes = new Array(NUM_SPHERES);
+
+        for (var i = 0; i < NUM_SPHERES; ++i) {
+            var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
+            var x = Math.sin(angle) * RADIUS;
+            var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
+            var z = Math.cos(angle) * RADIUS;
+            nodes[i] = {
+                scale: [0.8, 0.8, 0.8],
+                rotate: [0, 0, 0], // Will be used for global rotation
+                translate: [x, y, z],
+                modelMatrix: mat4.create(),
+
+                vao: sphereArray,
+                indicesLength: sphere.indices.length
+            };
+        }
+
+        //////////////////////////
+        // UNIFORM DATA
+        //////////////////////////
+
+        var projMatrix = mat4.create();
+        mat4.perspective(projMatrix, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
+
+        var viewMatrix = mat4.create();
+        // var eyePosition = vec3.fromValues(1, 1, 1);
+        var eyePosition = vec3.fromValues(0, 0.8, 2);
+        mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+
+        var viewProjMatrix = mat4.create();
+        mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
+
+        // var lightPosition = vec3.fromValues(1, 1, 0.5);
+        var lightPosition = vec3.fromValues(1, 1, 2);
+
+        var modelMatrix = mat4.create();
+        var rotateXMatrix = mat4.create();
+        var rotateYMatrix = mat4.create();
+
+        var sceneUniformData = new Float32Array(24);
+        sceneUniformData.set(viewProjMatrix);
+        sceneUniformData.set(eyePosition, 16);
+        sceneUniformData.set(lightPosition, 20);
+
+        var sceneUniformBuffer = gl.createBuffer();
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
+        var angleX = 0;
+        var angleY = 0;
+
+        var image = new Image();
+
+        image.onload = function() {
+            var texture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+            var levels = levels = Math.floor(Math.log2(Math.max(this.width, this.height))) + 1;
+            gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, image.width, image.height);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            gl.uniform1i(texLocation, 0);
+
+            var rotationMatrix = mat4.create();
+            var node;
+
+            function draw() {
+                // angleX += 0.01;
+                // angleY += 0.02;
+
+                // mat4.fromXRotation(rotateXMatrix, angleX);
+                // mat4.fromYRotation(rotateYMatrix, angleY);
+                // mat4.multiply(modelMatrix, rotateXMatrix, rotateYMatrix);
+
+                // gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
+
+                // gl.clear(gl.COLOR_BUFFER_BIT);
+                // gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                for (var i = 0, len = nodes.length; i < len; ++i) {
+                    node = nodes[i];
+                    gl.bindVertexArray(node.vao);
+
+                    node.rotate[1] += 0.002;
+
+                    utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
+                    mat4.fromYRotation(rotationMatrix, node.rotate[1]);
+                    mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
+                
+                    gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                    // modelMatrixData.set(node.modelMatrix, i * 16);
+
+                    gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                }
+                
+
+                requestAnimationFrame(draw);
+            }
+
+            requestAnimationFrame(draw);
+            
+        }
+
+        image.src = "img/khronos_webgl.png";
+
+    </script>
+    <a href="https://github.com/tsherif/webgl2examples" id="github-ribbon"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+</body>
+</html>
