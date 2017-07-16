@@ -472,6 +472,7 @@
         var angleY = 0;
 
         var image = new Image();
+        var firstFrame = true;
 
         image.onload = function() {
             var texture = gl.createTexture();
@@ -493,7 +494,7 @@
             gl.uniform1i(texLocation, 0);
 
             var rotationMatrix = mat4.create();
-            var node, bbox;
+            var node, bbox, isVisible = true;
 
             function draw() {
                 // angleX += 0.01;
@@ -508,13 +509,15 @@
                 // gl.clear(gl.COLOR_BUFFER_BIT);
                 // gl.drawArrays(gl.TRIANGLES, 0, numVertices);
 
+                gl.colorMask(true, true, true, true);
+                gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (var i = 0, len = nodes.length; i < len; ++i) {
                     node = nodes[i];
                     bbox = node.bbox;
 
-                    node.rotate[1] += 0.002;
+                    node.rotate[1] += 0.01;
 
                     utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
                     mat4.fromYRotation(rotationMatrix, node.rotate[1]);
@@ -523,44 +526,59 @@
                     
 
                     // use occlusion query with drawing bounding box
-                    // gl.colorMask(false, false, false, false);
-                    // gl.depthMask(false);
+                    gl.colorMask(false, false, false, false);
+                    gl.depthMask(false);
                     gl.useProgram(programBBox);
                     gl.bindVertexArray(node.vaobbox);
 
                     gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
                     
+                    if (!firstFrame) {
+                        if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
+                            // A query's result is never available in the same frame
+                            // the query was issued.  Try in the next frame.
+                            var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
+
+                            if (samplesPassed == 0) {
+                                // console.log('invisible node ' + i);
+                                isVisible = false;
+                            }
+                            else
+                            {
+                                // console.log('!!!visible node ' + i);
+                                isVisible = true;
+                            }
+                        }
+                    }
+                    
+
                     gl.beginQuery(gl.ANY_SAMPLES_PASSED, node.query);
                     gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
                     gl.endQuery(gl.ANY_SAMPLES_PASSED);
 
-                    if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
-                        // A query's result is never available in the same frame
-                        // the query was issued.  Try in the next frame.
-                        var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
+                    
+                    if (isVisible) {
+                        gl.colorMask(true, true, true, true);
+                        gl.depthMask(true);
+                        gl.useProgram(program);
+                        gl.bindVertexArray(node.vao);
 
-                        if (samplesPassed == 0) {
-                            console.log('invisible node ' + i);
-                            continue;
+                        gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                        // modelMatrixData.set(node.modelMatrix, i * 16);
+
+                        if (node.indicesLength) {
+                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                        } else {
+                            gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
                         }
                     }
-
-                    // gl.colorMask(true, true, true, true);
-                    // gl.depthMask(true);
-                    // gl.useProgram(program);
-                    // gl.bindVertexArray(node.vao);
-
-                    // gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
-                    // // modelMatrixData.set(node.modelMatrix, i * 16);
-
-                    // if (node.indicesLength) {
-                    //     gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
-                    // } else {
-                    //     gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
-                    // }
+                    
                     
                 }
                 
+                if (firstFrame) {
+                    firstFrame = false;
+                }
 
                 requestAnimationFrame(draw);
             }
