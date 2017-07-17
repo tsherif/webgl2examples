@@ -432,16 +432,17 @@
         gl.bindVertexArray(null);
 
 
-        var NUM_NODES = 32;
+        // var NUM_NODES = 32;
+        var NUM_NODES = 256;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
         var nodes = new Array(NUM_NODES);
 
         for (var i = 0; i < NUM_NODES; ++i) {
             var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
-            var x = Math.sin(angle) * RADIUS;
-            var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
-            var z = Math.cos(angle) * RADIUS;
+            var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 64) - 0.5;
+            var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
+            var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 2);
 
             if (i % 2 == 0) {
                 // sphere low
@@ -525,7 +526,7 @@
         mat4.perspective(projMatrixAssistCam, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
         var viewMatrixAssistCam = mat4.create();
-        var eyePositionAssistCam = vec3.fromValues(0, 2, 0);
+        var eyePositionAssistCam = vec3.fromValues(0, 4, 0);
         // var eyePositionAssistCam = vec3.fromValues(0, 0.8, 2);
         mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 0, -1));
         // mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
@@ -696,7 +697,7 @@
 
 
                 
-                if (firstFrame) {
+                if (firstFrame && occlusionCullingEnabled) {
                     firstFrame = false;
                 }
                 else if (!occlusionCullingEnabled) {
