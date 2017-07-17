@@ -275,8 +275,6 @@
             console.error(gl.getProgramInfoLog(programBBox));
         }
 
-
-
         var vsSourceAssistCam =  document.getElementById("vertex-assist-cam").text.trim();
         var fsSourceAssistCam =  document.getElementById("fragment-assist-cam").text.trim();
 
@@ -493,6 +491,18 @@
             
         }
 
+        nodes.sort(function(a, b){
+            var z = a.translate.z - b.translate.z;
+            if (z !== 0) {
+                return z;
+            }
+            var x = a.translate.x - b.translate.x;
+            if (x !== 0) {
+                return x;
+            }
+            return a.translate.y - b.translate.y;
+        });
+
         //////////////////////////
         // UNIFORM DATA
         //////////////////////////
@@ -587,6 +597,7 @@
                 isDrawNodes[i] = true;
             }
 
+            var t = 0;
             function draw() {
                 // angleX += 0.01;
                 // angleY += 0.02;
@@ -599,7 +610,7 @@
 
                 // gl.clear(gl.COLOR_BUFFER_BIT);
                 // gl.drawArrays(gl.TRIANGLES, 0, numVertices);
-                
+                t += 0.01;
                 invisibleNodesCount = 0;
 
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -616,7 +627,8 @@
                     node = nodes[i];
                     bbox = node.bbox;
 
-                    node.rotate[1] += 0.01;
+                    // node.rotate[1] += 0.01;
+                    node.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
 
                     utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
                     mat4.fromYRotation(rotationMatrix, node.rotate[1]);
