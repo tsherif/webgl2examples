@@ -248,8 +248,6 @@
             console.error(gl.getProgramInfoLog(program));
         }
 
-
-
         var vsSourceBBox =  document.getElementById("vertex-bbox").text.trim();
         var fsSourceBBox =  document.getElementById("fragment-bbox").text.trim();
 
@@ -366,7 +364,6 @@
         gl.bindVertexArray(null);
 
 
-
         sphereHigh.bbox = utils.computeBoundingBox(sphereHigh.positions, {geo: true});
 
         var sphereHighBBoxArray = gl.createVertexArray();
@@ -380,8 +377,6 @@
 
         gl.bindVertexArray(null);
 
-
-
         // sphere low poly
 
         var sphere = utils.createSphere({
@@ -389,8 +384,6 @@
             lat_bands: 96,
             radius: 0.5
         });
-
-        // var numVertices = sphere.positions.length / 3;
 
         var sphereArray = gl.createVertexArray();
         gl.bindVertexArray(sphereArray);
@@ -419,8 +412,6 @@
 
         gl.bindVertexArray(null);
 
-
-
         sphere.bbox = utils.computeBoundingBox(sphere.positions, {geo: true});
 
         var sphereBBoxArray = gl.createVertexArray();
@@ -436,17 +427,21 @@
 
 
         // var NUM_NODES = 32;
+        // var NUM_NODES = 64;
         // var NUM_NODES = 128;
         var NUM_NODES = 320;
+        // var NUM_NODES = 512;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
         var nodes = new Array(NUM_NODES);
 
         for (var i = 0; i < NUM_NODES; ++i) {
             var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
-            var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 64) - 0.5;
+            // var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 64) - 0.5;
+            var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 128) - 0.5;
             var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
-            var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 2);
+            // var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 2);
+            var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 4);
 
             if (i % 2 == 0) {
                 // sphere low
@@ -464,17 +459,6 @@
                     bboxNumVertices: sphere.bbox.bbox.positions.length / 3
                 };
             } else {
-                // // cube
-                // nodes[i] = {
-                //     scale: [0.4, 0.4, 0.4],
-                //     rotate: [0, 0, 0], // Will be used for global rotation
-                //     translate: [x, y, z],
-                //     modelMatrix: mat4.create(),
-
-                //     vao: cubeArray,
-                //     numVertices: box.positions.length / 3
-                // }
-
                 // sphere high
                 nodes[i] = {
                     scale: [0.8, 0.8, 0.8],
@@ -607,17 +591,6 @@
 
             var t = 0;
             function draw() {
-                // angleX += 0.01;
-                // angleY += 0.02;
-
-                // mat4.fromXRotation(rotateXMatrix, angleX);
-                // mat4.fromYRotation(rotateYMatrix, angleY);
-                // mat4.multiply(modelMatrix, rotateXMatrix, rotateYMatrix);
-
-                // gl.uniformMatrix4fv(modelMatrixLocation, false, modelMatrix);
-
-                // gl.clear(gl.COLOR_BUFFER_BIT);
-                // gl.drawArrays(gl.TRIANGLES, 0, numVertices);
                 t += 0.01;
                 invisibleNodesCount = 0;
 
@@ -627,9 +600,6 @@
                 gl.colorMask(true, true, true, true);
                 gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-                // gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
-
 
                 for (var i = 0, len = nodes.length; i < len; ++i) {
                     node = nodes[i];
@@ -677,16 +647,14 @@
                             } 
                             else {
                                 isVisible = isDrawNodes[i];
-                                // isDrawNodes[i] = false;
-                                // invisibleNodesCount++;
                                 doquery = false;
                             }
                         }
                         
                         if (doquery) {
-                            gl.beginQuery(gl.ANY_SAMPLES_PASSED, node.query);
+                            gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, node.query);
                             gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
-                            gl.endQuery(gl.ANY_SAMPLES_PASSED);
+                            gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
                         }
                         
                     }
@@ -710,8 +678,10 @@
                     
                 }
 
-
-
+                document.getElementById("num-invisible-nodes").innerHTML = invisibleNodesCount;
+                if (invisibleNodesCount < nodes.length / 2) {
+                    invisibleNodesCount += 0;
+                }
 
                 
                 if (firstFrame && occlusionCullingEnabled) {
@@ -721,14 +691,9 @@
                     firstFrame = true;
                 }
 
-                // console.log('invisible node count: ' + invisibleNodesCount);
-                document.getElementById("num-invisible-nodes").innerHTML = invisibleNodesCount;
-
 
                 // draw assist camera view
                 if (showAssistCamEnabled) {
-                    // gl.uniformBlockBinding(program, sceneUniformsLocation, 1);
-                
                     gl.viewport(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
                     gl.enable(gl.BLEND);
                     gl.enable(gl.SCISSOR_TEST);
@@ -743,11 +708,9 @@
                     // gl.useProgram(program);
                     for (i = 0, len = nodes.length; i < len; ++i) {
                         if (isDrawNodes[i]) {
-                            // console.log(i);
                             node = nodes[i];
                             gl.bindVertexArray(node.vao);
                             gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
-                            // gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
                             if (node.indicesLength) {
                                 gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
                             } else {
@@ -758,9 +721,6 @@
                     gl.disable(gl.SCISSOR_TEST);
                     gl.disable(gl.BLEND);
                 }
-               
-
-
 
                 requestAnimationFrame(draw);
             }
