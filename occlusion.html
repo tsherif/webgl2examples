@@ -51,10 +51,13 @@
     </div>
     <canvas id="gl-canvas"></canvas>
     <div id="occlusion-controls">
+        Num of Nodes: <div style="display: inline-block" id="num-nodes"></div>
+        <br/>
+        Num of Invisible Nodes: <div style="display: inline-block" id="num-invisible-nodes"></div>
+        <br/>
         Enable Occlusion Culling: <input id="occlusion-toggle" type="checkbox" checked>
         <br/>
         Show top down assist camera: <input id="assist-cam-toggle" type="checkbox" checked> 
-        <!-- <br/> -->
     </div>
     <script type="x-shader/vs" id="vertex-draw">
         #version 300 es
@@ -433,8 +436,8 @@
 
 
         // var NUM_NODES = 32;
-        var NUM_NODES = 128;
-        // var NUM_NODES = 320;
+        // var NUM_NODES = 128;
+        var NUM_NODES = 320;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
         var nodes = new Array(NUM_NODES);
@@ -504,6 +507,8 @@
             }
             return - a.translate.y + b.translate.y;
         });
+
+        document.getElementById("num-nodes").innerHTML = nodes.length;
 
         //////////////////////////
         // UNIFORM DATA
@@ -717,6 +722,7 @@
                 }
 
                 // console.log('invisible node count: ' + invisibleNodesCount);
+                document.getElementById("num-invisible-nodes").innerHTML = invisibleNodesCount;
 
 
                 // draw assist camera view
