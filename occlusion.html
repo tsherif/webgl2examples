@@ -31,7 +31,7 @@
     <script src="utils/utils.js"></script>
     <link rel="stylesheet" href="css/webgl2examples.css">
     <style>
-        #ssao-controls {
+        #occlusion-controls {
             position: absolute;
             bottom: 20px;
             right: 20px;
@@ -50,8 +50,11 @@
         </div>
     </div>
     <canvas id="gl-canvas"></canvas>
-    <div id="ssao-controls">
-        Enable Occlusion Culling: <input id="ssao-toggle" type="checkbox" checked>
+    <div id="occlusion-controls">
+        Enable Occlusion Culling: <input id="occlusion-toggle" type="checkbox" checked>
+        <br/>
+        Show top down assist camera: <input id="assist-cam-toggle" type="checkbox" checked> 
+        <!-- <br/> -->
     </div>
     <script type="x-shader/vs" id="vertex-draw">
         #version 300 es
@@ -174,6 +177,20 @@
         }
     </script>
     <script type="text/javascript">
+        var occlusionCullingEnabled = true;
+        var showAssistCamEnabled = true;
+
+        document.getElementById("occlusion-toggle").addEventListener("change", function() {
+            occlusionCullingEnabled = this.checked;
+            for(var i = 0, len = isDrawNodes.length; i < len; i++) {
+                isDrawNodes[i] = true;
+            }
+        });
+
+        document.getElementById("assist-cam-toggle").addEventListener("change", function() {
+            showAssistCamEnabled = this.checked;
+        });
+
         var canvas = document.getElementById("gl-canvas");
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -537,6 +554,8 @@
 
         var image = new Image();
         var firstFrame = true;
+        var isDrawNodes = new Array(nodes.length);
+        var invisibleNodesCount = 0;
 
         image.onload = function() {
             var texture = gl.createTexture();
@@ -563,8 +582,10 @@
 
             var rotationMatrix = mat4.create();
             var node, bbox, isVisible = true;
-            var isDrawNodes = new Array(nodes.length);
-            var invisibleNodesCount = 0;
+
+            for (var i = 0, len = isDrawNodes.length; i < len; ++i) {
+                isDrawNodes[i] = true;
+            }
 
             function draw() {
                 // angleX += 0.01;
@@ -588,7 +609,8 @@
                 gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
+                // gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
+
 
                 for (var i = 0, len = nodes.length; i < len; ++i) {
                     node = nodes[i];
@@ -601,53 +623,52 @@
                     mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
 
                     
+                    if (occlusionCullingEnabled) {
+                        // use occlusion query with drawing bounding box
+                        gl.colorMask(false, false, false, false);
+                        gl.depthMask(false);
+                        
+                        gl.useProgram(programBBox);
+                        gl.bindVertexArray(node.vaobbox);
 
-                    // use occlusion query with drawing bounding box
-                    gl.colorMask(false, false, false, false);
-                    gl.depthMask(false);
-                    
-                    gl.useProgram(programBBox);
-                    gl.bindVertexArray(node.vaobbox);
+                        gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
+                        
+                        isVisible = true;
+                        isDrawNodes[i] = true;
 
-                    gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
-                    
-                    isVisible = true;
-                    isDrawNodes[i] = true;
+                        if (!firstFrame) {
+                            if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
+                                // A query's result is never available in the same frame
+                                // the query was issued.  Try in the next frame.
+                                var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
 
-                    if (!firstFrame) {
-                        if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
-                            // A query's result is never available in the same frame
-                            // the query was issued.  Try in the next frame.
-                            var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
-
-                            if (samplesPassed == 0) {
-                                // console.log('invisible node ' + i);
-                                isVisible = false;
-                                isDrawNodes[i] = false;
-                                invisibleNodesCount++;
+                                if (samplesPassed == 0) {
+                                    // console.log('invisible node ' + i);
+                                    isVisible = false;
+                                    isDrawNodes[i] = false;
+                                    invisibleNodesCount++;
+                                }
+                                // else
+                                // {
+                                //     // console.log('!!!visible node ' + i);
+                                //     visibleNodesCount++;
+                                // }
                             }
-                            // else
-                            // {
-                            //     // console.log('!!!visible node ' + i);
-                            //     visibleNodesCount++;
-                            // }
                         }
+                        
+                        gl.beginQuery(gl.ANY_SAMPLES_PASSED, node.query);
+                        gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
+                        gl.endQuery(gl.ANY_SAMPLES_PASSED);
                     }
-                    
-
-                    gl.beginQuery(gl.ANY_SAMPLES_PASSED, node.query);
-                    gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
-                    gl.endQuery(gl.ANY_SAMPLES_PASSED);
 
                     
-                    if (isVisible) {
+                    if (!occlusionCullingEnabled || isVisible) {
                         gl.colorMask(true, true, true, true);
                         gl.depthMask(true);
                         gl.useProgram(program);
                         gl.bindVertexArray(node.vao);
 
                         gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
-                        // modelMatrixData.set(node.modelMatrix, i * 16);
 
                         if (node.indicesLength) {
                             gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
@@ -658,45 +679,55 @@
                     
                     
                 }
+
+
+
+
                 
                 if (firstFrame) {
                     firstFrame = false;
+                }
+                else if (!occlusionCullingEnabled) {
+                    firstFrame = true;
                 }
 
                 // console.log('invisible node count: ' + invisibleNodesCount);
 
 
                 // draw assist camera view
-                gl.uniformBlockBinding(program, sceneUniformsLocation, 1);
+                if (showAssistCamEnabled) {
+                    // gl.uniformBlockBinding(program, sceneUniformsLocation, 1);
                 
-                gl.viewport(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
-                gl.enable(gl.BLEND);
-                gl.enable(gl.SCISSOR_TEST);
-                gl.scissor(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
-                gl.colorMask(true, true, true, true);
-                gl.depthMask(true);
-                gl.disable(gl.DEPTH_TEST);
-                // gl.clearColor(1, 1, 1, 1);
-                gl.clearColor(0.3, 0.3, 0.3, 1);
-                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                gl.useProgram(programAssistCam);
-                // gl.useProgram(program);
-                for (i = 0, len = nodes.length; i < len; ++i) {
-                    if (isDrawNodes[i]) {
-                        // console.log(i);
-                        node = nodes[i];
-                        gl.bindVertexArray(node.vao);
-                        gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
-                        // gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
-                        if (node.indicesLength) {
-                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
-                        } else {
-                            gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                    gl.viewport(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                    gl.enable(gl.BLEND);
+                    gl.enable(gl.SCISSOR_TEST);
+                    gl.scissor(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                    gl.colorMask(true, true, true, true);
+                    gl.depthMask(true);
+                    gl.disable(gl.DEPTH_TEST);
+                    // gl.clearColor(1, 1, 1, 1);
+                    gl.clearColor(0.3, 0.3, 0.3, 1);
+                    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                    gl.useProgram(programAssistCam);
+                    // gl.useProgram(program);
+                    for (i = 0, len = nodes.length; i < len; ++i) {
+                        if (isDrawNodes[i]) {
+                            // console.log(i);
+                            node = nodes[i];
+                            gl.bindVertexArray(node.vao);
+                            gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
+                            // gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                            if (node.indicesLength) {
+                                gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                            } else {
+                                gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
+                            }
                         }
                     }
+                    gl.disable(gl.SCISSOR_TEST);
+                    gl.disable(gl.BLEND);
                 }
-                gl.disable(gl.SCISSOR_TEST);
-                gl.disable(gl.BLEND);
+               
 
 
 
