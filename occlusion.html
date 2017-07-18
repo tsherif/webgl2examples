@@ -322,59 +322,9 @@
 
         var positionBuffer, uvBuffer, normalBuffer, indices;
 
-        // sphere high poly
-
-        var sphereHigh = utils.createSphere({
-            long_bands: 128,
-            lat_bands: 128,
-            radius: 0.6
-        });
-
-        var sphereHighArray = gl.createVertexArray();
-        gl.bindVertexArray(sphereHighArray);
-
-        positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.positions, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(0);
-
-        uvBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.uvs, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(1);
-
-        normalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.normals, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(2);
-
-        indices = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphereHigh.indices, gl.STATIC_DRAW);
-
-        gl.bindVertexArray(null);
-
-        sphereHigh.bbox = utils.computeBoundingBox(sphereHigh.positions, {geo: true});
-
-        var sphereHighBBoxArray = gl.createVertexArray();
-        gl.bindVertexArray(sphereHighBBoxArray);
-
-        positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, sphereHigh.bbox.bbox.positions, gl.STATIC_DRAW);
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(0);
-
-        gl.bindVertexArray(null);
-
-        // sphere low poly
-
         var sphere = utils.createSphere({
-            long_bands: 64,
-            lat_bands: 64,
+            long_bands: 96,
+            lat_bands: 96,
             radius: 0.5
         });
 
@@ -429,55 +379,24 @@
             var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
             var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 4);
 
-            if (i % 2 == 0) {
-                // sphere low
-                nodes[i] = {
-                    scale: [0.8, 0.8, 0.8],
-                    rotate: [0, 0, 0], // Will be used for global rotation
-                    translate: [x, y, z],
-                    modelMatrix: mat4.create(),
+            nodes[i] = {
+                scale: [0.8, 0.8, 0.8],
+                rotate: [0, 0, 0], // Will be used for global rotation
+                translate: [x, y, z],
+                modelMatrix: mat4.create(),
 
-                    vao: sphereArray,
-                    indicesLength: sphere.indices.length,
+                vao: sphereArray,
+                indicesLength: sphere.indices.length,
 
-                    bbox: sphere.bbox,
-                    vaobbox: sphereBBoxArray,
-                    bboxNumVertices: sphere.bbox.bbox.positions.length / 3,
+                bbox: sphere.bbox,
+                vaobbox: sphereBBoxArray,
+                bboxNumVertices: sphere.bbox.bbox.positions.length / 3,
 
-                    query: gl.createQuery()
-                };
-            } else {
-                // sphere high
-                nodes[i] = {
-                    scale: [0.8, 0.8, 0.8],
-                    rotate: [0, 0, 0], // Will be used for global rotation
-                    translate: [x, y, z],
-                    modelMatrix: mat4.create(),
-
-                    vao: sphereHighArray,
-                    indicesLength: sphereHigh.indices.length,
-
-                    bbox: sphereHigh.bbox,
-                    vaobbox: sphereHighBBoxArray,
-                    bboxNumVertices: sphereHigh.bbox.bbox.positions.length / 3,
-
-                    query: gl.createQuery()
-                };
-            }
+                query: gl.createQuery()
+            };
             
+            utils.xformMatrix(nodes[i].modelMatrix, nodes[i].translate, null, nodes[i].scale);
         }
-
-        nodes.sort(function(a, b){
-            var z = a.translate.z - b.translate.z;
-            if (z !== 0) {
-                return z;
-            }
-            var x = a.translate.x - b.translate.x;
-            if (x !== 0) {
-                return x;
-            }
-            return - a.translate.y + b.translate.y;
-        });
 
         document.getElementById("num-nodes").innerHTML = nodes.length;
 
@@ -496,6 +415,30 @@
 
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
+
+        var tmpVec4a = vec4.create();
+        var tmpVec4b = vec4.create();
+        var tmpMat4 = mat4.create();
+        nodes.sort(function(a, b){
+            // sort nodes by dist to eye (via pos in view space)
+            // we assume their relative order is static in this demo
+            vec4.set(tmpVec4a, a.translate.x, a.translate.y, a.translate.z, 1.0);
+            vec4.set(tmpVec4b, b.translate.x, b.translate.y, b.translate.z, 1.0);
+
+            mat4.mul(tmpMat4, viewMatrix, a.modelMatrix);
+            vec4.transformMat4(tmpVec4a, tmpVec4a, tmpMat4);
+            mat4.mul(tmpMat4, viewMatrix, b.modelMatrix);
+            vec4.transformMat4(tmpVec4b, tmpVec4b, tmpMat4);
+            
+            vec4.sub(tmpVec4a, tmpVec4a, tmpVec4b);
+            if (tmpVec4a[0] !== 0) {
+                return tmpVec4a[0];
+            }
+            if (tmpVec4a[2] !== 0) {
+                return tmpVec4a[2];
+            }
+            return -tmpVec4a[1];
+        });
 
         // top down assist camera
         var projMatrixAssistCam = mat4.create();
@@ -555,7 +498,7 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
 
-            var levels = levels = Math.floor(Math.log2(Math.max(this.width, this.height))) + 1;
+            var levels = Math.floor(Math.log2(Math.max(this.width, this.height))) + 1;
             gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, image.width, image.height);
             gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
             gl.generateMipmap(gl.TEXTURE_2D);
