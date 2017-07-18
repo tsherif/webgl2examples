@@ -21,9 +21,6 @@
   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
-<!-- 
-    SSAO algorithm from http://www.nutty.ca/?page_id=352&link=ssao
- -->
 <html>
 <head>
     <title>WebGL 2 Example: Occlusion culling using occlusion query</title>
@@ -156,8 +153,6 @@
         layout(std140, column_major) uniform;
         
         layout(location=0) in vec4 position;
-        //layout(location=1) in vec2 uv;
-        //layout(location=2) in vec4 normal;
         
         uniform mat4 uViewProj;
         
@@ -210,7 +205,6 @@
             gl.drawingBufferWidth / 5, 
             gl.drawingBufferHeight / 5
         ];
-
 
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clearColor(0.0, 0.0, 0.0, 1.0)
@@ -363,7 +357,6 @@
 
         gl.bindVertexArray(null);
 
-
         sphereHigh.bbox = utils.computeBoundingBox(sphereHigh.positions, {geo: true});
 
         var sphereHighBBoxArray = gl.createVertexArray();
@@ -380,8 +373,8 @@
         // sphere low poly
 
         var sphere = utils.createSphere({
-            long_bands: 96,
-            lat_bands: 96,
+            long_bands: 64,
+            lat_bands: 64,
             radius: 0.5
         });
 
@@ -432,10 +425,8 @@
 
         for (var i = 0; i < NUM_NODES; ++i) {
             var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
-            // var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 64) - 0.5;
             var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 128) - 0.5;
             var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
-            // var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 2);
             var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 4);
 
             if (i % 2 == 0) {
@@ -506,20 +497,16 @@
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
 
-
         // top down assist camera
         var projMatrixAssistCam = mat4.create();
         mat4.perspective(projMatrixAssistCam, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
         var viewMatrixAssistCam = mat4.create();
         var eyePositionAssistCam = vec3.fromValues(3, 5, -2);
-        // var eyePositionAssistCam = vec3.fromValues(0, 0.8, 2);
         mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(3, 0, -2), vec3.fromValues(0, 0, -1));
-        // mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
 
         var viewProjMatrixAssistCam = mat4.create();
         mat4.multiply(viewProjMatrixAssistCam, projMatrixAssistCam, viewMatrixAssistCam);
-
 
         gl.useProgram(programAssistCam);
         gl.uniformMatrix4fv(viewProjMatrixLocationAssistCam, false, viewProjMatrixAssistCam);
@@ -602,16 +589,15 @@
                     node = nodes[i];
                     bbox = node.bbox;
 
-                    // node.rotate[1] += 0.01;
                     node.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
 
                     utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
                     mat4.fromYRotation(rotationMatrix, node.rotate[1]);
                     mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
-
                     
                     if (occlusionCullingEnabled) {
                         // use occlusion query with drawing bounding box
+                        // to determine if a node is visible
                         gl.colorMask(false, false, false, false);
                         gl.depthMask(false);
                         
@@ -619,8 +605,7 @@
                         gl.bindVertexArray(node.vaobbox);
 
                         gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
-                        
-                        // isDrawNodes[i] = true;
+
                         doquery = true;
 
                         if (!firstFrame) {
@@ -670,15 +655,12 @@
 
                         gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
                     }
-                    
-                    
                 }
 
                 document.getElementById("num-invisible-nodes").innerHTML = invisibleNodesCount;
                 if (invisibleNodesCount < nodes.length / 2) {
                     invisibleNodesCount += 0;
                 }
-
                 
                 if (firstFrame && occlusionCullingEnabled) {
                     firstFrame = false;
@@ -686,7 +668,6 @@
                 else if (!occlusionCullingEnabled) {
                     firstFrame = true;
                 }
-
 
                 // draw assist camera view
                 if (showAssistCamEnabled) {
@@ -697,11 +678,9 @@
                     gl.colorMask(true, true, true, true);
                     gl.depthMask(true);
                     gl.disable(gl.DEPTH_TEST);
-                    // gl.clearColor(1, 1, 1, 1);
                     gl.clearColor(0.3, 0.3, 0.3, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.useProgram(programAssistCam);
-                    // gl.useProgram(program);
                     for (i = 0, len = nodes.length; i < len; ++i) {
                         if (isDrawNodes[i]) {
                             node = nodes[i];
