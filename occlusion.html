@@ -425,12 +425,7 @@
 
         gl.bindVertexArray(null);
 
-
-        // var NUM_NODES = 32;
-        // var NUM_NODES = 64;
-        // var NUM_NODES = 128;
-        var NUM_NODES = 320;
-        // var NUM_NODES = 512;
+        var NUM_NODES = 512;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
         var nodes = new Array(NUM_NODES);
@@ -456,7 +451,9 @@
 
                     bbox: sphere.bbox,
                     vaobbox: sphereBBoxArray,
-                    bboxNumVertices: sphere.bbox.bbox.positions.length / 3
+                    bboxNumVertices: sphere.bbox.bbox.positions.length / 3,
+
+                    query: gl.createQuery()
                 };
             } else {
                 // sphere high
@@ -471,12 +468,11 @@
 
                     bbox: sphereHigh.bbox,
                     vaobbox: sphereHighBBoxArray,
-                    bboxNumVertices: sphereHigh.bbox.bbox.positions.length / 3
+                    bboxNumVertices: sphereHigh.bbox.bbox.positions.length / 3,
+
+                    query: gl.createQuery()
                 };
             }
-
-            // query object
-            nodes[i].query = gl.createQuery();
             
         }
 
@@ -556,6 +552,9 @@
         var image = new Image();
         var firstFrame = true;
         var isDrawNodes = new Array(nodes.length);
+        for (var i = 0, len = isDrawNodes.length; i < len; ++i) {
+            isDrawNodes[i] = true;
+        }
         var invisibleNodesCount = 0;
 
         image.onload = function() {
@@ -584,10 +583,8 @@
             var rotationMatrix = mat4.create();
             var node, bbox, isVisible = true;
             var doquery = true;
-
-            for (var i = 0, len = isDrawNodes.length; i < len; ++i) {
-                isDrawNodes[i] = true;
-            }
+            var samplesPassed;
+            
 
             var t = 0;
             function draw() {
@@ -623,29 +620,28 @@
 
                         gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
                         
-                        isVisible = true;
-                        isDrawNodes[i] = true;
+                        // isDrawNodes[i] = true;
                         doquery = true;
 
                         if (!firstFrame) {
                             if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
                                 // A query's result is never available in the same frame
                                 // the query was issued.  Try in the next frame.
-                                var samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
+                                samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
 
                                 if (samplesPassed == 0) {
                                     // console.log('invisible node ' + i);
                                     isVisible = false;
                                     isDrawNodes[i] = false;
-                                    invisibleNodesCount++;
                                 }
-                                // else
-                                // {
-                                //     // console.log('!!!visible node ' + i);
-                                //     visibleNodesCount++;
-                                // }
+                                else {
+                                    isVisible = true;
+                                    isDrawNodes[i] = true;
+                                }
                             } 
                             else {
+                                // query is not ready, use visible info from previous frame (to make assist cam looks correct)
+                                // if we want to be conservative, simple set isVisible to true
                                 isVisible = isDrawNodes[i];
                                 doquery = false;
                             }
@@ -655,6 +651,10 @@
                             gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, node.query);
                             gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
                             gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+                        }
+
+                        if (!isVisible) {
+                            invisibleNodesCount++;
                         }
                         
                     }
@@ -668,11 +668,7 @@
 
                         gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
 
-                        if (node.indicesLength) {
-                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
-                        } else {
-                            gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
-                        }
+                        gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
                     }
                     
                     
@@ -711,11 +707,7 @@
                             node = nodes[i];
                             gl.bindVertexArray(node.vao);
                             gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
-                            if (node.indicesLength) {
-                                gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
-                            } else {
-                                gl.drawArrays(gl.TRIANGLES, 0, node.numVertices);
-                            }
+                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
                         }
                     }
                     gl.disable(gl.SCISSOR_TEST);
