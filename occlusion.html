@@ -177,7 +177,7 @@
     </script>
     <script type="text/javascript">
         var occlusionCullingEnabled = true;
-        var showAssistCamEnabled = true;
+        var showHUD = true;
 
         document.getElementById("occlusion-toggle").addEventListener("change", function() {
             occlusionCullingEnabled = this.checked;
@@ -187,7 +187,7 @@
         });
 
         document.getElementById("hud-toggle").addEventListener("change", function() {
-            showAssistCamEnabled = this.checked;
+            showHUD = this.checked;
         });
 
         var sphereCountElement = document.getElementById("num-spheres");
@@ -374,10 +374,10 @@
         // Object definitions
         var GRID_DIM = 6;
         var GRID_OFFSET = GRID_DIM / 2 - 0.5;
-        var NUM_SPHERE = GRID_DIM * GRID_DIM;
-        var spheres = new Array(NUM_SPHERE);
+        var NUM_SPHERES = GRID_DIM * GRID_DIM;
+        var spheres = new Array(NUM_SPHERES);
 
-        for (var i = 0; i < NUM_SPHERE; ++i) {
+        for (var i = 0; i < NUM_SPHERES; ++i) {
             var x = Math.floor(i / GRID_DIM) - GRID_OFFSET;
             var z = i % GRID_DIM - GRID_OFFSET;
 
@@ -394,6 +394,7 @@
                 boundingBoxNumVertices: sphere.boundingBox.geo.positions.length / 3,
 
                 query: gl.createQuery(),
+                queryInProgress: false,
                 occluded: false
             };
             
@@ -505,28 +506,15 @@
             gl.useProgram(null);
         
             var rotationMatrix = mat4.create();
-            var sphere, boundingBox, isVisible = true;
-            var doquery = true;
+            var sphere, boundingBox;
             var samplesPassed;
             
-            var i, len = spheres.length;
+            var i;
 
-            var t = 0;
             function draw() {
-                t += 0.003;
                 occludedSpheres = 0;
 
-                // transform spheres
-                for (i = 0; i < len; ++i) {
-                    sphere = spheres[i];
-
-                    sphere.rotate[1] = t;
-
-                    utils.xformMatrix(sphere.modelMatrix, sphere.translate, null, sphere.scale);
-                    mat4.fromYRotation(rotationMatrix, sphere.rotate[1]);
-                    mat4.multiply(sphere.modelMatrix, rotationMatrix, sphere.modelMatrix);
-                }
-
+                // Note: Sort based on previous frame's transformations
                 if (occlusionCullingEnabled) {
                     spheres.sort(depthSort);
                 }
@@ -534,59 +522,54 @@
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
                 gl.clearColor(0, 0, 0, 1);
                 gl.enable(gl.DEPTH_TEST);
-                gl.colorMask(true, true, true, true);
-                gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                for (i = 0; i < len; ++i) {
+                for (i = 0; i < NUM_SPHERES; ++i) {
                     sphere = spheres[i];
                     boundingBox = sphere.boundingBox;
+
+                    // Update transforms
+                    sphere.rotate[1] += 0.003;
+
+                    utils.xformMatrix(sphere.modelMatrix, sphere.translate, null, sphere.scale);
+                    mat4.fromYRotation(rotationMatrix, sphere.rotate[1]);
+                    mat4.multiply(sphere.modelMatrix, rotationMatrix, sphere.modelMatrix);
+                    
+                    //////////////////
+                    // OCCLUSION TEST
+                    //////////////////
                     
                     if (occlusionCullingEnabled) {
-                        // use occlusion query with drawing bounding box
-                        // to determine if a sphere is visible
+                        
                         gl.colorMask(false, false, false, false);
                         gl.depthMask(false);
-                        
                         gl.useProgram(boundingBoxProgram);
                         gl.bindVertexArray(sphere.boundingBoxVertexArray);
-
                         gl.uniformMatrix4fv(boundingBoxModelMatrixLocation, false, sphere.modelMatrix);
 
-                        doquery = true;
-
-                        if (!firstFrame) {
-                            if (gl.getQueryParameter(sphere.query, gl.QUERY_RESULT_AVAILABLE)) {
-                                // A query's result is never available in the same frame
-                                // the query was issued.  Try in the next frame.
-                                samplesPassed = gl.getQueryParameter(sphere.query, gl.QUERY_RESULT);
-
-                                if (samplesPassed === 0) {
-                                    sphere.occluded = true;
-                                } else {
-                                    sphere.occluded = false;
-                                }
-                            } else {
-                                // query is not ready, use visible info from previous frame (to make assist cam looks correct)
-                                // if we want to be conservative, simple set isVisible to true
-                                doquery = false;
+                        // Check query results here (will be from previous frame or earlier)
+                        if (sphere.queryInProgress && gl.getQueryParameter(sphere.query, gl.QUERY_RESULT_AVAILABLE)) {
+                            sphere.occluded = gl.getQueryParameter(sphere.query, gl.QUERY_RESULT) === 0;
+                            if (sphere.occluded) {
+                                occludedSpheres++;
                             }
+                            sphere.queryInProgress = false;
                         }
-                        
-                        if (doquery) {
+    
+                        // Query is initiated here by drawing the bounding box of the sphere
+                        if (!sphere.queryInProgress) {
                             gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, sphere.query);
                             gl.drawArrays(gl.TRIANGLES, 0, sphere.boundingBoxNumVertices);
                             gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
-                        }
-
-                        if (sphere.occluded) {
-                            occludedSpheres++;
+                            sphere.queryInProgress = true;
                         }
                         
+                    } else {
+                        sphere.occluded = false;
                     }
 
                     
-                    if (!occlusionCullingEnabled || !sphere.occluded) {
+                    if (!sphere.occluded) {
                         gl.colorMask(true, true, true, true);
                         gl.depthMask(true);
                         gl.useProgram(program);
@@ -597,15 +580,9 @@
                         gl.drawElements(gl.TRIANGLES, sphere.numElements, gl.UNSIGNED_SHORT, 0);
                     }
                 }
-                
-                if (firstFrame && occlusionCullingEnabled) {
-                    firstFrame = false;
-                } else if (!occlusionCullingEnabled) {
-                    firstFrame = true;
-                }
 
-                // draw assist camera view
-                if (showAssistCamEnabled) {
+                // Draw HUD (visualize occlusion results)
+                if (showHUD) {
                     gl.viewport(hudViewport[0], hudViewport[1], hudViewport[2], hudViewport[3]);
                     gl.enable(gl.BLEND);
                     gl.enable(gl.SCISSOR_TEST);
@@ -616,7 +593,7 @@
                     gl.clearColor(0.3, 0.3, 0.3, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.useProgram(hudPrograme);
-                    for (i = 0; i < len; ++i) {
+                    for (i = 0; i < NUM_SPHERES; ++i) {
                         sphere = spheres[i];
                         if (!sphere.occluded) {
                             gl.bindVertexArray(sphere.vertexArray);
