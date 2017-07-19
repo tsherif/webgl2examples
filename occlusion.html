@@ -211,7 +211,6 @@
         ];
 
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        gl.clearColor(0.0, 0.0, 0.0, 1.0)
         gl.enable(gl.DEPTH_TEST);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -294,13 +293,13 @@
             console.error(gl.getShaderInfoLog(hudFragmentShader));
         }
 
-        var hudPrograme = gl.createProgram();
-        gl.attachShader(hudPrograme, hudVertexShader);
-        gl.attachShader(hudPrograme, hudFragmentShader);
-        gl.linkProgram(hudPrograme);
+        var hudProgram = gl.createProgram();
+        gl.attachShader(hudProgram, hudVertexShader);
+        gl.attachShader(hudProgram, hudFragmentShader);
+        gl.linkProgram(hudProgram);
 
-        if (!gl.getProgramParameter(hudPrograme, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(hudPrograme));
+        if (!gl.getProgramParameter(hudProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(hudProgram));
         }
 
         /////////////////////////
@@ -318,8 +317,8 @@
         var boundingBoxModelMatrixLocation = gl.getUniformLocation(boundingBoxProgram, "uModel");
 
         // Hud program locations
-        var hudViewProjLocation = gl.getUniformLocation(hudPrograme, "uViewProj");
-        var hudModelMatrixLocation = gl.getUniformLocation(hudPrograme, "uModel");
+        var hudViewProjLocation = gl.getUniformLocation(hudProgram, "uViewProj");
+        var hudModelMatrixLocation = gl.getUniformLocation(hudProgram, "uModel");
 
         /////////////////////
         // SET UP GEOMETRY 
@@ -429,7 +428,7 @@
         var viewProjMatrixAssistCam = mat4.create();
         mat4.multiply(viewProjMatrixAssistCam, projMatrixAssistCam, viewMatrixAssistCam);
 
-        gl.useProgram(hudPrograme);
+        gl.useProgram(hudProgram);
         gl.uniformMatrix4fv(hudViewProjLocation, false, viewProjMatrixAssistCam);
         gl.useProgram(null);
 
@@ -522,6 +521,8 @@
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
                 gl.clearColor(0, 0, 0, 1);
                 gl.enable(gl.DEPTH_TEST);
+                gl.colorMask(true, true, true, true);
+                gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (i = 0; i < NUM_SPHERES; ++i) {
@@ -592,7 +593,7 @@
                     gl.disable(gl.DEPTH_TEST);
                     gl.clearColor(0.3, 0.3, 0.3, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                    gl.useProgram(hudPrograme);
+                    gl.useProgram(hudProgram);
                     for (i = 0; i < NUM_SPHERES; ++i) {
                         sphere = spheres[i];
                         if (!sphere.occluded) {
