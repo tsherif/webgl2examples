@@ -436,11 +436,11 @@
             vec4.transformMat4(tmpVec4b, tmpVec4b, tmpMat4);
             
             vec4.sub(tmpVec4a, tmpVec4a, tmpVec4b);
-            if (tmpVec4a[0] !== 0) {
-                return tmpVec4a[0];
-            }
             if (tmpVec4a[2] !== 0) {
                 return tmpVec4a[2];
+            }
+            if (tmpVec4a[0] !== 0) {
+                return tmpVec4a[0];
             }
             return -tmpVec4a[1];
         });
