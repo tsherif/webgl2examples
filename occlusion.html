@@ -28,7 +28,7 @@
  -->
 <html>
 <head>
-    <title>WebGL 2 Example: Occlusion culling using occlusion query</title>
+    <title>WebGL 2 Example: Occlusion Culling</title>
     <script src="utils/gl-matrix.js"></script>
     <script src="utils/utils.js"></script>
     <link rel="stylesheet" href="css/webgl2examples.css">
@@ -43,7 +43,7 @@
 </head>
 <body>
     <div id="example-title">
-        <header>WebGL 2 Example: Occlusion culling using occlusion query</header>
+        <header>WebGL 2 Example: Occlusion Culling</header>
         <div id="features">
             Features: Vertex Arrays, Uniform Buffers, Immutable Textures, Occlusion Query
         </div>
@@ -53,12 +53,9 @@
     </div>
     <canvas id="gl-canvas"></canvas>
     <div id="occlusion-controls">
-        Spheres: <div style="display: inline-block" id="num-spheres"></div>
-        <br/>
-        Culled spheres: <div style="display: inline-block" id="num-invisible-spheres"></div>
-        <br/>
-        Enable occlusioin culling: <input id="occlusion-toggle" type="checkbox" checked>
-        <br/>
+        Spheres: <span id="num-spheres"></span><br>
+        Culled spheres: <span id="num-invisible-spheres"></span><br>
+        Enable occlusion culling: <input id="occlusion-toggle" type="checkbox" checked><br>
         Top-down HUD: <input id="hud-toggle" type="checkbox" checked> 
     </div>
     <script type="x-shader/vs" id="vertex-draw">
@@ -331,7 +328,7 @@
 
         var positionBuffer, uvBuffer, normalBuffer, indices;
 
-        var sphere = utils.createSphere({ radius: 0.5 });
+        var sphere = utils.createSphere({ radius: 0.6 });
 
         var sphereArray = gl.createVertexArray();
         gl.bindVertexArray(sphereArray);
@@ -373,21 +370,18 @@
 
         gl.bindVertexArray(null);
 
-        var NUM_SPHERE = 512;
-        var NUM_PER_ROW = 8;
-        var RADIUS = 0.6;
+        var GRID_DIM = 6;
+        var GRID_OFFSET = GRID_DIM / 2 - 0.5;
+        var NUM_SPHERE = GRID_DIM * GRID_DIM;
         var spheres = new Array(NUM_SPHERE);
 
         for (var i = 0; i < NUM_SPHERE; ++i) {
-            var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
-            var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 128) - 0.5;
-            var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
-            var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 4);
+            var x = Math.floor(i / GRID_DIM) - GRID_OFFSET;
+            var z = i % GRID_DIM - GRID_OFFSET;
 
             spheres[i] = {
-                scale: [0.8, 0.8, 0.8],
                 rotate: [0, 0, 0], // Will be used for global rotation
-                translate: [x, y, z],
+                translate: [x, 0, z],
                 modelMatrix: mat4.create(),
 
                 vertexArray: sphereArray,
@@ -401,7 +395,7 @@
                 occluded: false
             };
             
-            utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
+            utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate);
         }
 
         sphereCountElement.innerHTML = spheres.length;
@@ -415,7 +409,7 @@
         mat4.perspective(projMatrix, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
         var viewMatrix = mat4.create();
-        var eyePosition = vec3.fromValues(0, 0.8, 2);
+        var eyePosition = vec3.fromValues(0, 0, 5);
         mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
 
         var viewProjMatrix = mat4.create();
@@ -426,8 +420,8 @@
         mat4.perspective(projMatrixAssistCam, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
         var viewMatrixAssistCam = mat4.create();
-        var eyePositionAssistCam = vec3.fromValues(3, 5, -2);
-        mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(3, 0, -2), vec3.fromValues(0, 0, -1));
+        var eyePositionAssistCam = vec3.fromValues(0, 5, 0);
+        mat4.lookAt(viewMatrixAssistCam, eyePositionAssistCam, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 0, -1));
 
         var viewProjMatrixAssistCam = mat4.create();
         mat4.multiply(viewProjMatrixAssistCam, projMatrixAssistCam, viewMatrixAssistCam);
@@ -436,7 +430,7 @@
         gl.uniformMatrix4fv(viewProjMatrixLocationAssistCam, false, viewProjMatrixAssistCam);
         gl.useProgram(null);
 
-        var lightPosition = vec3.fromValues(1, 1, 2);
+        var lightPosition = vec3.fromValues(1, 1, 40);
 
         var modelMatrix = mat4.create();
         var rotateXMatrix = mat4.create();
@@ -517,14 +511,14 @@
 
             var t = 0;
             function draw() {
-                t += 0.01;
+                t += 0.003;
                 occludedSpheres = 0;
 
                 // transform spheres
                 for (i = 0; i < len; ++i) {
                     sphere = spheres[i];
 
-                    sphere.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
+                    sphere.rotate[1] = t;
 
                     utils.xformMatrix(sphere.modelMatrix, sphere.translate, null, sphere.scale);
                     mat4.fromYRotation(rotationMatrix, sphere.rotate[1]);
