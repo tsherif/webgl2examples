@@ -157,7 +157,6 @@
         layout(location=0) in vec4 position;
         
         uniform mat4 uViewProj;
-        
         uniform mat4 uModel;
 
         void main() {
@@ -220,107 +219,107 @@
         // SET UP PROGRAM
         /////////////////////
 
-        var vsSource =  document.getElementById("vertex-draw").text.trim();
-        var fsSource =  document.getElementById("fragment-draw").text.trim();
+        var drawVsSource =  document.getElementById("vertex-draw").text.trim();
+        var drawFsSource =  document.getElementById("fragment-draw").text.trim();
 
-        var vertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShader, vsSource);
-        gl.compileShader(vertexShader);
+        var drawVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(drawVertexShader, drawVsSource);
+        gl.compileShader(drawVertexShader);
 
-        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(vertexShader));
+        if (!gl.getShaderParameter(drawVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(drawVertexShader));
         }
 
-        var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShader, fsSource);
-        gl.compileShader(fragmentShader);
+        var drawFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(drawFragmentShader, drawFsSource);
+        gl.compileShader(drawFragmentShader);
 
-        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(fragmentShader));
+        if (!gl.getShaderParameter(drawFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(drawFragmentShader));
         }
 
         var program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
+        gl.attachShader(program, drawVertexShader);
+        gl.attachShader(program, drawFragmentShader);
         gl.linkProgram(program);
 
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
             console.error(gl.getProgramInfoLog(program));
         }
 
-        var vsSourceBBox =  document.getElementById("vertex-boundingBox").text.trim();
-        var fsSourceBBox =  document.getElementById("fragment-boundingBox").text.trim();
+        var boundingBoxVSource =  document.getElementById("vertex-boundingBox").text.trim();
+        var boundingBoxFSource =  document.getElementById("fragment-boundingBox").text.trim();
 
-        var vertexShaderBBox = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShaderBBox, vsSourceBBox);
-        gl.compileShader(vertexShaderBBox);
+        var boundingBoxVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(boundingBoxVertexShader, boundingBoxVSource);
+        gl.compileShader(boundingBoxVertexShader);
 
-        if (!gl.getShaderParameter(vertexShaderBBox, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(vertexShaderBBox));
+        if (!gl.getShaderParameter(boundingBoxVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(boundingBoxVertexShader));
         }
 
-        var fragmentShaderBBox = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShaderBBox, fsSourceBBox);
-        gl.compileShader(fragmentShaderBBox);
+        var boundingBoxFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(boundingBoxFragmentShader, boundingBoxFSource);
+        gl.compileShader(boundingBoxFragmentShader);
 
-        if (!gl.getShaderParameter(fragmentShaderBBox, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(fragmentShaderBBox));
+        if (!gl.getShaderParameter(boundingBoxFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(boundingBoxFragmentShader));
         }
 
-        var programBBox = gl.createProgram();
-        gl.attachShader(programBBox, vertexShaderBBox);
-        gl.attachShader(programBBox, fragmentShaderBBox);
-        gl.linkProgram(programBBox);
+        var boundingBoxProgram = gl.createProgram();
+        gl.attachShader(boundingBoxProgram, boundingBoxVertexShader);
+        gl.attachShader(boundingBoxProgram, boundingBoxFragmentShader);
+        gl.linkProgram(boundingBoxProgram);
 
-        if (!gl.getProgramParameter(programBBox, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(programBBox));
+        if (!gl.getProgramParameter(boundingBoxProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(boundingBoxProgram));
         }
 
-        var vsSourceAssistCam =  document.getElementById("vertex-hud").text.trim();
-        var fsSourceAssistCam =  document.getElementById("fragment-hud").text.trim();
+        var hudVSSource =  document.getElementById("vertex-hud").text.trim();
+        var hudFSSoure =  document.getElementById("fragment-hud").text.trim();
 
-        var vertexShaderAssistCam = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vertexShaderAssistCam, vsSourceAssistCam);
-        gl.compileShader(vertexShaderAssistCam);
+        var hudVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(hudVertexShader, hudVSSource);
+        gl.compileShader(hudVertexShader);
 
-        if (!gl.getShaderParameter(vertexShaderAssistCam, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(vertexShaderAssistCam));
+        if (!gl.getShaderParameter(hudVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(hudVertexShader));
         }
 
-        var fragmentShaderAssistCam = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fragmentShaderAssistCam, fsSourceAssistCam);
-        gl.compileShader(fragmentShaderAssistCam);
+        var hudFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(hudFragmentShader, hudFSSoure);
+        gl.compileShader(hudFragmentShader);
 
-        if (!gl.getShaderParameter(fragmentShaderAssistCam, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(fragmentShaderAssistCam));
+        if (!gl.getShaderParameter(hudFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(hudFragmentShader));
         }
 
-        var programAssistCam = gl.createProgram();
-        gl.attachShader(programAssistCam, vertexShaderAssistCam);
-        gl.attachShader(programAssistCam, fragmentShaderAssistCam);
-        gl.linkProgram(programAssistCam);
+        var hudPrograme = gl.createProgram();
+        gl.attachShader(hudPrograme, hudVertexShader);
+        gl.attachShader(hudPrograme, hudFragmentShader);
+        gl.linkProgram(hudPrograme);
 
-        if (!gl.getProgramParameter(programAssistCam, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(programAssistCam));
+        if (!gl.getProgramParameter(hudPrograme, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(hudPrograme));
         }
 
         /////////////////////////
         // GET UNIFORM LOCATIONS
         /////////////////////////
 
+        // Main draw program locations
+        var drawModelMatrixLocation = gl.getUniformLocation(program, "uModel");
+        var drawTexLocation = gl.getUniformLocation(program, "tex");
+
         var sceneUniformsLocation = gl.getUniformBlockIndex(program, "SceneUniforms");
         gl.uniformBlockBinding(program, sceneUniformsLocation, 0);
 
-        var modelMatrixLocation = gl.getUniformLocation(program, "uModel");
-        var texLocation = gl.getUniformLocation(program, "tex");
+        // Bounding box program locations
+        var boundingBoxModelMatrixLocation = gl.getUniformLocation(boundingBoxProgram, "uModel");
 
-        var sceneUniformsLocationBBox = gl.getUniformBlockIndex(programBBox, "SceneUniforms");
-        gl.uniformBlockBinding(programBBox, sceneUniformsLocationBBox, 0);
-
-        var modelMatrixLocationBBox = gl.getUniformLocation(programBBox, "uModel");
-
-        var viewProjMatrixLocationAssistCam = gl.getUniformLocation(programAssistCam, "uViewProj");
-        var modelMatrixLocationAssistCam = gl.getUniformLocation(programAssistCam, "uModel");
+        // Hud program locations
+        var hudViewProjLocation = gl.getUniformLocation(hudPrograme, "uViewProj");
+        var hudModelMatrixLocation = gl.getUniformLocation(hudPrograme, "uModel");
 
         /////////////////////
         // SET UP GEOMETRY 
@@ -328,6 +327,7 @@
 
         var positionBuffer, uvBuffer, normalBuffer, indices;
 
+        // Sphere geometry
         var sphere = utils.createSphere({ radius: 0.6 });
 
         var sphereArray = gl.createVertexArray();
@@ -357,6 +357,7 @@
 
         gl.bindVertexArray(null);
 
+        // Bounding box geometry
         sphere.boundingBox = utils.computeBoundingBox(sphere.positions, {geo: true});
 
         var boundingBoxArray = gl.createVertexArray();
@@ -370,6 +371,7 @@
 
         gl.bindVertexArray(null);
 
+        // Object definitions
         var GRID_DIM = 6;
         var GRID_OFFSET = GRID_DIM / 2 - 0.5;
         var NUM_SPHERE = GRID_DIM * GRID_DIM;
@@ -426,8 +428,8 @@
         var viewProjMatrixAssistCam = mat4.create();
         mat4.multiply(viewProjMatrixAssistCam, projMatrixAssistCam, viewMatrixAssistCam);
 
-        gl.useProgram(programAssistCam);
-        gl.uniformMatrix4fv(viewProjMatrixLocationAssistCam, false, viewProjMatrixAssistCam);
+        gl.useProgram(hudPrograme);
+        gl.uniformMatrix4fv(hudViewProjLocation, false, viewProjMatrixAssistCam);
         gl.useProgram(null);
 
         var lightPosition = vec3.fromValues(1, 1, 40);
@@ -499,7 +501,7 @@
             gl.generateMipmap(gl.TEXTURE_2D);
 
             gl.useProgram(program);
-            gl.uniform1i(texLocation, 0);
+            gl.uniform1i(drawTexLocation, 0);
             gl.useProgram(null);
         
             var rotationMatrix = mat4.create();
@@ -525,7 +527,6 @@
                     mat4.multiply(sphere.modelMatrix, rotationMatrix, sphere.modelMatrix);
                 }
 
-
                 if (occlusionCullingEnabled) {
                     spheres.sort(depthSort);
                 }
@@ -547,10 +548,10 @@
                         gl.colorMask(false, false, false, false);
                         gl.depthMask(false);
                         
-                        gl.useProgram(programBBox);
+                        gl.useProgram(boundingBoxProgram);
                         gl.bindVertexArray(sphere.boundingBoxVertexArray);
 
-                        gl.uniformMatrix4fv(modelMatrixLocationBBox, false, sphere.modelMatrix);
+                        gl.uniformMatrix4fv(boundingBoxModelMatrixLocation, false, sphere.modelMatrix);
 
                         doquery = true;
 
@@ -591,7 +592,7 @@
                         gl.useProgram(program);
                         gl.bindVertexArray(sphere.vertexArray);
 
-                        gl.uniformMatrix4fv(modelMatrixLocation, false, sphere.modelMatrix);
+                        gl.uniformMatrix4fv(drawModelMatrixLocation, false, sphere.modelMatrix);
 
                         gl.drawElements(gl.TRIANGLES, sphere.numElements, gl.UNSIGNED_SHORT, 0);
                     }
@@ -614,12 +615,12 @@
                     gl.disable(gl.DEPTH_TEST);
                     gl.clearColor(0.3, 0.3, 0.3, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                    gl.useProgram(programAssistCam);
+                    gl.useProgram(hudPrograme);
                     for (i = 0; i < len; ++i) {
                         sphere = spheres[i];
                         if (!sphere.occluded) {
                             gl.bindVertexArray(sphere.vertexArray);
-                            gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, sphere.modelMatrix);
+                            gl.uniformMatrix4fv(hudModelMatrixLocation, false, sphere.modelMatrix);
                             gl.drawElements(gl.TRIANGLES, sphere.numElements, gl.UNSIGNED_SHORT, 0);
                         }
                     }
