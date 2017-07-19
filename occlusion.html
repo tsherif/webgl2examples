@@ -22,9 +22,9 @@
   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
 <!-- 
-    Occlusion culling algorithm (naive version) from 
-    https://developer.nvidia.com/gpugems/GPUGems2/gpugems2_chapter06.html
+    Occlusion culling algorithm base on: 
     https://developer.nvidia.com/gpugems/GPUGems/gpugems_ch29.html
+    https://developer.nvidia.com/gpugems/GPUGems2/gpugems2_chapter06.html
  -->
 <html>
 <head>
@@ -53,13 +53,13 @@
     </div>
     <canvas id="gl-canvas"></canvas>
     <div id="occlusion-controls">
-        Num of Nodes: <div style="display: inline-block" id="num-nodes"></div>
+        Spheres: <div style="display: inline-block" id="num-spheres"></div>
         <br/>
-        Num of Invisible Nodes: <div style="display: inline-block" id="num-invisible-nodes"></div>
+        Culled spheres: <div style="display: inline-block" id="num-invisible-spheres"></div>
         <br/>
-        Enable Occlusion Culling: <input id="occlusion-toggle" type="checkbox" checked>
+        Enable occlusioin culling: <input id="occlusion-toggle" type="checkbox" checked>
         <br/>
-        Show top down assist camera: <input id="assist-cam-toggle" type="checkbox" checked> 
+        Top-down HUD: <input id="hud-toggle" type="checkbox" checked> 
     </div>
     <script type="x-shader/vs" id="vertex-draw">
         #version 300 es
@@ -68,7 +68,7 @@
         
         layout(location=0) in vec4 position;
         layout(location=1) in vec2 uv;
-        layout(location=2) in vec4 normal;
+        layout(location=2) in vec3 normal;
         
         uniform SceneUniforms {
             mat4 viewProj;
@@ -80,12 +80,12 @@
 
         out  vec3 vPosition;
         out  vec2 vUV;
-        flat out  vec3 vNormal;
+        out  vec3 vNormal;
         void main() {
             vec4 worldPosition = uModel * position;
             vPosition = worldPosition.xyz;
             vUV = uv;
-            vNormal = (uModel * normal).xyz;
+            vNormal = (uModel * vec4(normal, 0.0)).xyz;
             gl_Position = uScene.viewProj * worldPosition;
         }
     </script>
@@ -105,7 +105,7 @@
         
         in vec3 vPosition;
         in vec2 vUV;
-        flat in vec3 vNormal;
+        in vec3 vNormal;
 
         out vec4 fragColor;
         void main() {
@@ -121,7 +121,7 @@
             fragColor = vec4(color * (diffuse + highlight + ambient), 1.0);
         }
     </script>
-    <script type="x-shader/vs" id="vertex-bbox">
+    <script type="x-shader/vs" id="vertex-boundingBox">
         #version 300 es
 
         layout(std140, column_major) uniform;
@@ -140,7 +140,7 @@
             gl_Position = uScene.viewProj * uModel * position;
         }
     </script>
-    <script type="x-shader/vf" id="fragment-bbox">
+    <script type="x-shader/vf" id="fragment-boundingBox">
         #version 300 es
         precision highp float;
 
@@ -152,7 +152,7 @@
             fragColor = vec4(1.0, 1.0, 1.0, 1.0);
         }
     </script>
-    <script type="x-shader/vs" id="vertex-assist-cam">
+    <script type="x-shader/vs" id="vertex-hud">
         #version 300 es
 
         layout(std140, column_major) uniform;
@@ -167,7 +167,7 @@
             gl_Position = uViewProj * uModel * position;
         }
     </script>
-    <script type="x-shader/vf" id="fragment-assist-cam">
+    <script type="x-shader/vf" id="fragment-hud">
         #version 300 es
         precision highp float;
 
@@ -185,14 +185,17 @@
 
         document.getElementById("occlusion-toggle").addEventListener("change", function() {
             occlusionCullingEnabled = this.checked;
-            for(var i = 0, len = nodes.length; i < len; i++) {
-                nodes[i].isDrawNode = true;
+            for(var i = 0, len = spheres.length; i < len; i++) {
+                spheres[i].occluded = false;
             }
         });
 
-        document.getElementById("assist-cam-toggle").addEventListener("change", function() {
+        document.getElementById("hud-toggle").addEventListener("change", function() {
             showAssistCamEnabled = this.checked;
         });
+
+        var sphereCountElement = document.getElementById("num-spheres");
+        var occludedSpheresElement = document.getElementById("num-invisible-spheres");
 
         var canvas = document.getElementById("gl-canvas");
         canvas.width = window.innerWidth;
@@ -204,7 +207,7 @@
             document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
         }
 
-        var assistCamViewport = [
+        var hudViewport = [
             0, 
             0,
             gl.drawingBufferWidth / 5, 
@@ -214,6 +217,7 @@
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         gl.clearColor(0.0, 0.0, 0.0, 1.0)
         gl.enable(gl.DEPTH_TEST);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         /////////////////////
         // SET UP PROGRAM
@@ -247,8 +251,8 @@
             console.error(gl.getProgramInfoLog(program));
         }
 
-        var vsSourceBBox =  document.getElementById("vertex-bbox").text.trim();
-        var fsSourceBBox =  document.getElementById("fragment-bbox").text.trim();
+        var vsSourceBBox =  document.getElementById("vertex-boundingBox").text.trim();
+        var fsSourceBBox =  document.getElementById("fragment-boundingBox").text.trim();
 
         var vertexShaderBBox = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vertexShaderBBox, vsSourceBBox);
@@ -275,8 +279,8 @@
             console.error(gl.getProgramInfoLog(programBBox));
         }
 
-        var vsSourceAssistCam =  document.getElementById("vertex-assist-cam").text.trim();
-        var fsSourceAssistCam =  document.getElementById("fragment-assist-cam").text.trim();
+        var vsSourceAssistCam =  document.getElementById("vertex-hud").text.trim();
+        var fsSourceAssistCam =  document.getElementById("fragment-hud").text.trim();
 
         var vertexShaderAssistCam = gl.createShader(gl.VERTEX_SHADER);
         gl.shaderSource(vertexShaderAssistCam, vsSourceAssistCam);
@@ -322,16 +326,12 @@
         var modelMatrixLocationAssistCam = gl.getUniformLocation(programAssistCam, "uModel");
 
         /////////////////////
-        // SET UP GEOMETRY & scene
+        // SET UP GEOMETRY 
         /////////////////////
 
         var positionBuffer, uvBuffer, normalBuffer, indices;
 
-        var sphere = utils.createSphere({
-            long_bands: 96,
-            lat_bands: 96,
-            radius: 0.5
-        });
+        var sphere = utils.createSphere({ radius: 0.5 });
 
         var sphereArray = gl.createVertexArray();
         gl.bindVertexArray(sphereArray);
@@ -360,51 +360,51 @@
 
         gl.bindVertexArray(null);
 
-        sphere.bbox = utils.computeBoundingBox(sphere.positions, {geo: true});
+        sphere.boundingBox = utils.computeBoundingBox(sphere.positions, {geo: true});
 
-        var sphereBBoxArray = gl.createVertexArray();
-        gl.bindVertexArray(sphereBBoxArray);
+        var boundingBoxArray = gl.createVertexArray();
+        gl.bindVertexArray(boundingBoxArray);
 
         positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, sphere.bbox.bbox.positions, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.boundingBox.geo.positions, gl.STATIC_DRAW);
         gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(0);
 
         gl.bindVertexArray(null);
 
-        var NUM_NODES = 512;
+        var NUM_SPHERE = 512;
         var NUM_PER_ROW = 8;
         var RADIUS = 0.6;
-        var nodes = new Array(NUM_NODES);
+        var spheres = new Array(NUM_SPHERE);
 
-        for (var i = 0; i < NUM_NODES; ++i) {
+        for (var i = 0; i < NUM_SPHERE; ++i) {
             var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
             var x = Math.sin(angle) * RADIUS + 2 * Math.floor(i / 128) - 0.5;
             var y = (Math.floor(i / NUM_PER_ROW) % 4) / (NUM_PER_ROW / 4) - 0.75;
             var z = Math.cos(angle) * RADIUS - 2 * Math.floor(i / 32 % 4);
 
-            nodes[i] = {
+            spheres[i] = {
                 scale: [0.8, 0.8, 0.8],
                 rotate: [0, 0, 0], // Will be used for global rotation
                 translate: [x, y, z],
                 modelMatrix: mat4.create(),
 
-                vao: sphereArray,
-                indicesLength: sphere.indices.length,
+                vertexArray: sphereArray,
+                numElements: sphere.indices.length,
 
-                bbox: sphere.bbox,
-                vaobbox: sphereBBoxArray,
-                bboxNumVertices: sphere.bbox.bbox.positions.length / 3,
+                boundingBox: sphere.boundingBox,
+                boundingBoxVertexArray: boundingBoxArray,
+                boundingBoxNumVertices: sphere.boundingBox.geo.positions.length / 3,
 
                 query: gl.createQuery(),
-                isDrawNode: true
+                occluded: false
             };
             
-            utils.xformMatrix(nodes[i].modelMatrix, nodes[i].translate, null, nodes[i].scale);
+            utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
         }
 
-        document.getElementById("num-nodes").innerHTML = nodes.length;
+        sphereCountElement.innerHTML = spheres.length;
 
         //////////////////////////
         // UNIFORM DATA
@@ -415,30 +415,11 @@
         mat4.perspective(projMatrix, Math.PI / 2, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 10.0);
 
         var viewMatrix = mat4.create();
-        // var eyePosition = vec3.fromValues(1, 1, 1);
         var eyePosition = vec3.fromValues(0, 0.8, 2);
         mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
 
         var viewProjMatrix = mat4.create();
         mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
-
-        var tmpVec4a = vec4.create();
-        var tmpVec4b = vec4.create();
-        var tmpMat4 = mat4.create();
-        function sortNodes(a, b) {
-            // sort nodes by dist to eye (via pos in view space)
-            // we assume their relative order is static in this demo
-            vec4.set(tmpVec4a, a.translate[0], a.translate[1], a.translate[2], 1.0);
-            vec4.set(tmpVec4b, b.translate[0], b.translate[1], b.translate[2], 1.0);
-
-            mat4.mul(tmpMat4, viewMatrix, a.modelMatrix);
-            vec4.transformMat4(tmpVec4a, tmpVec4a, tmpMat4);
-            mat4.mul(tmpMat4, viewMatrix, b.modelMatrix);
-            vec4.transformMat4(tmpVec4b, tmpVec4b, tmpMat4);
-            
-            vec4.sub(tmpVec4a, tmpVec4a, tmpVec4b);
-            return -tmpVec4a[2];
-        }
 
         // top down assist camera
         var projMatrixAssistCam = mat4.create();
@@ -479,9 +460,33 @@
         gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, assistCamUniformBuffer);
         gl.bufferData(gl.UNIFORM_BUFFER, assistCamUniformData, gl.STATIC_DRAW);
 
+        //////////////////////////
+        // DEPTH SORT FUNCTION
+        //////////////////////////
+
+        var sortPositionA = vec4.create();
+        var sortPositionB = vec4.create();
+        var sortModelView = mat4.create();
+
+        function depthSort(a, b) {
+            vec4.set(sortPositionA, a.translate[0], a.translate[1], a.translate[2], 1.0);
+            vec4.set(sortPositionB, b.translate[0], b.translate[1], b.translate[2], 1.0);
+
+            mat4.mul(sortModelView, viewMatrix, a.modelMatrix);
+            vec4.transformMat4(sortPositionA, sortPositionA, sortModelView);
+            mat4.mul(sortModelView, viewMatrix, b.modelMatrix);
+            vec4.transformMat4(sortPositionB, sortPositionB, sortModelView);
+            
+            return sortPositionB[2] - sortPositionA[2];
+        }
+
+        /////////////////
+        // LOAD TEXTURE
+        /////////////////
+
         var image = new Image();
         var firstFrame = true;
-        var invisibleNodesCount = 0;
+        var occludedSpheres = 0;
 
         image.onload = function() {
             var texture = gl.createTexture();
@@ -502,36 +507,33 @@
             gl.useProgram(program);
             gl.uniform1i(texLocation, 0);
             gl.useProgram(null);
-            
-            gl.blendEquation( gl.FUNC_ADD );
-            gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
-
+        
             var rotationMatrix = mat4.create();
-            var node, bbox, isVisible = true;
+            var sphere, boundingBox, isVisible = true;
             var doquery = true;
             var samplesPassed;
             
-            var i, len = nodes.length;
+            var i, len = spheres.length;
 
             var t = 0;
             function draw() {
                 t += 0.01;
-                invisibleNodesCount = 0;
+                occludedSpheres = 0;
 
-                // transform nodes
+                // transform spheres
                 for (i = 0; i < len; ++i) {
-                    node = nodes[i];
+                    sphere = spheres[i];
 
-                    node.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
+                    sphere.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
 
-                    utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
-                    mat4.fromYRotation(rotationMatrix, node.rotate[1]);
-                    mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
+                    utils.xformMatrix(sphere.modelMatrix, sphere.translate, null, sphere.scale);
+                    mat4.fromYRotation(rotationMatrix, sphere.rotate[1]);
+                    mat4.multiply(sphere.modelMatrix, rotationMatrix, sphere.modelMatrix);
                 }
 
+
                 if (occlusionCullingEnabled) {
-                    // sort by view distance
-                    nodes.sort(sortNodes);
+                    spheres.sort(depthSort);
                 }
 
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -542,89 +544,77 @@
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
                 for (i = 0; i < len; ++i) {
-                    node = nodes[i];
-                    bbox = node.bbox;
+                    sphere = spheres[i];
+                    boundingBox = sphere.boundingBox;
                     
                     if (occlusionCullingEnabled) {
                         // use occlusion query with drawing bounding box
-                        // to determine if a node is visible
+                        // to determine if a sphere is visible
                         gl.colorMask(false, false, false, false);
                         gl.depthMask(false);
                         
                         gl.useProgram(programBBox);
-                        gl.bindVertexArray(node.vaobbox);
+                        gl.bindVertexArray(sphere.boundingBoxVertexArray);
 
-                        gl.uniformMatrix4fv(modelMatrixLocationBBox, false, node.modelMatrix);
+                        gl.uniformMatrix4fv(modelMatrixLocationBBox, false, sphere.modelMatrix);
 
                         doquery = true;
 
                         if (!firstFrame) {
-                            if (gl.getQueryParameter(node.query, gl.QUERY_RESULT_AVAILABLE)) {
+                            if (gl.getQueryParameter(sphere.query, gl.QUERY_RESULT_AVAILABLE)) {
                                 // A query's result is never available in the same frame
                                 // the query was issued.  Try in the next frame.
-                                samplesPassed = gl.getQueryParameter(node.query, gl.QUERY_RESULT);
+                                samplesPassed = gl.getQueryParameter(sphere.query, gl.QUERY_RESULT);
 
-                                if (samplesPassed == 0) {
-                                    // console.log('invisible node ' + i);
-                                    isVisible = false;
-                                    node.isDrawNode = false;
+                                if (samplesPassed === 0) {
+                                    sphere.occluded = true;
+                                } else {
+                                    sphere.occluded = false;
                                 }
-                                else {
-                                    isVisible = true;
-                                    node.isDrawNode = true;
-                                }
-                            } 
-                            else {
+                            } else {
                                 // query is not ready, use visible info from previous frame (to make assist cam looks correct)
                                 // if we want to be conservative, simple set isVisible to true
-                                isVisible = node.isDrawNode;
                                 doquery = false;
                             }
                         }
                         
                         if (doquery) {
-                            gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, node.query);
-                            gl.drawArrays(gl.TRIANGLES, 0, node.bboxNumVertices);
+                            gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, sphere.query);
+                            gl.drawArrays(gl.TRIANGLES, 0, sphere.boundingBoxNumVertices);
                             gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
                         }
 
-                        if (!isVisible) {
-                            invisibleNodesCount++;
+                        if (sphere.occluded) {
+                            occludedSpheres++;
                         }
                         
                     }
 
                     
-                    if (!occlusionCullingEnabled || isVisible) {
+                    if (!occlusionCullingEnabled || !sphere.occluded) {
                         gl.colorMask(true, true, true, true);
                         gl.depthMask(true);
                         gl.useProgram(program);
-                        gl.bindVertexArray(node.vao);
+                        gl.bindVertexArray(sphere.vertexArray);
 
-                        gl.uniformMatrix4fv(modelMatrixLocation, false, node.modelMatrix);
+                        gl.uniformMatrix4fv(modelMatrixLocation, false, sphere.modelMatrix);
 
-                        gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                        gl.drawElements(gl.TRIANGLES, sphere.numElements, gl.UNSIGNED_SHORT, 0);
                     }
-                }
-
-                document.getElementById("num-invisible-nodes").innerHTML = invisibleNodesCount;
-                if (invisibleNodesCount < nodes.length / 2) {
-                    invisibleNodesCount += 0;
                 }
                 
                 if (firstFrame && occlusionCullingEnabled) {
                     firstFrame = false;
-                }
-                else if (!occlusionCullingEnabled) {
+                } else if (!occlusionCullingEnabled) {
                     firstFrame = true;
                 }
 
                 // draw assist camera view
                 if (showAssistCamEnabled) {
-                    gl.viewport(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                    gl.viewport(hudViewport[0], hudViewport[1], hudViewport[2], hudViewport[3]);
                     gl.enable(gl.BLEND);
                     gl.enable(gl.SCISSOR_TEST);
-                    gl.scissor(assistCamViewport[0], assistCamViewport[1], assistCamViewport[2], assistCamViewport[3]);
+                    gl.scissor(hudViewport[0], hudViewport[1], hudViewport[2], hudViewport[3]);
                     gl.colorMask(true, true, true, true);
                     gl.depthMask(true);
                     gl.disable(gl.DEPTH_TEST);
@@ -632,16 +622,18 @@
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.useProgram(programAssistCam);
                     for (i = 0; i < len; ++i) {
-                        node = nodes[i];
-                        if (node.isDrawNode) {
-                            gl.bindVertexArray(node.vao);
-                            gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
-                            gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
+                        sphere = spheres[i];
+                        if (!sphere.occluded) {
+                            gl.bindVertexArray(sphere.vertexArray);
+                            gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, sphere.modelMatrix);
+                            gl.drawElements(gl.TRIANGLES, sphere.numElements, gl.UNSIGNED_SHORT, 0);
                         }
                     }
                     gl.disable(gl.SCISSOR_TEST);
                     gl.disable(gl.BLEND);
                 }
+
+                occludedSpheresElement.innerHTML = occludedSpheres;
 
                 requestAnimationFrame(draw);
             }

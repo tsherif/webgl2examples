@@ -359,7 +359,7 @@
           if (geo) {
             var size = vec3.create();
             vec3.subtract(size, res.max, res.min);
-            res.bbox = utils.createBox({
+            res.geo = utils.createBox({
               position: res.min,
               width: size[0],
               height: size[1],
