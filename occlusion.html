@@ -185,8 +185,8 @@
 
         document.getElementById("occlusion-toggle").addEventListener("change", function() {
             occlusionCullingEnabled = this.checked;
-            for(var i = 0, len = isDrawNodes.length; i < len; i++) {
-                isDrawNodes[i] = true;
+            for(var i = 0, len = nodes.length; i < len; i++) {
+                nodes[i].isDrawNode = true;
             }
         });
 
@@ -397,7 +397,8 @@
                 vaobbox: sphereBBoxArray,
                 bboxNumVertices: sphere.bbox.bbox.positions.length / 3,
 
-                query: gl.createQuery()
+                query: gl.createQuery(),
+                isDrawNode: true
             };
             
             utils.xformMatrix(nodes[i].modelMatrix, nodes[i].translate, null, nodes[i].scale);
@@ -424,11 +425,11 @@
         var tmpVec4a = vec4.create();
         var tmpVec4b = vec4.create();
         var tmpMat4 = mat4.create();
-        nodes.sort(function(a, b){
+        function sortNodes(a, b) {
             // sort nodes by dist to eye (via pos in view space)
             // we assume their relative order is static in this demo
-            vec4.set(tmpVec4a, a.translate.x, a.translate.y, a.translate.z, 1.0);
-            vec4.set(tmpVec4b, b.translate.x, b.translate.y, b.translate.z, 1.0);
+            vec4.set(tmpVec4a, a.translate[0], a.translate[1], a.translate[2], 1.0);
+            vec4.set(tmpVec4b, b.translate[0], b.translate[1], b.translate[2], 1.0);
 
             mat4.mul(tmpMat4, viewMatrix, a.modelMatrix);
             vec4.transformMat4(tmpVec4a, tmpVec4a, tmpMat4);
@@ -436,14 +437,8 @@
             vec4.transformMat4(tmpVec4b, tmpVec4b, tmpMat4);
             
             vec4.sub(tmpVec4a, tmpVec4a, tmpVec4b);
-            if (tmpVec4a[2] !== 0) {
-                return tmpVec4a[2];
-            }
-            if (tmpVec4a[0] !== 0) {
-                return tmpVec4a[0];
-            }
-            return -tmpVec4a[1];
-        });
+            return -tmpVec4a[2];
+        }
 
         // top down assist camera
         var projMatrixAssistCam = mat4.create();
@@ -486,10 +481,6 @@
 
         var image = new Image();
         var firstFrame = true;
-        var isDrawNodes = new Array(nodes.length);
-        for (var i = 0, len = isDrawNodes.length; i < len; ++i) {
-            isDrawNodes[i] = true;
-        }
         var invisibleNodesCount = 0;
 
         image.onload = function() {
@@ -520,11 +511,28 @@
             var doquery = true;
             var samplesPassed;
             
+            var i, len = nodes.length;
 
             var t = 0;
             function draw() {
                 t += 0.01;
                 invisibleNodesCount = 0;
+
+                // transform nodes
+                for (i = 0; i < len; ++i) {
+                    node = nodes[i];
+
+                    node.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
+
+                    utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
+                    mat4.fromYRotation(rotationMatrix, node.rotate[1]);
+                    mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
+                }
+
+                if (occlusionCullingEnabled) {
+                    // sort by view distance
+                    nodes.sort(sortNodes);
+                }
 
                 gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
                 gl.clearColor(0, 0, 0, 1);
@@ -533,15 +541,9 @@
                 gl.depthMask(true);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                for (var i = 0, len = nodes.length; i < len; ++i) {
+                for (i = 0; i < len; ++i) {
                     node = nodes[i];
                     bbox = node.bbox;
-
-                    node.rotate[1] = Math.PI / 6 * (Math.sin(t - Math.PI / 2) + 1);
-
-                    utils.xformMatrix(node.modelMatrix, node.translate, null, node.scale);
-                    mat4.fromYRotation(rotationMatrix, node.rotate[1]);
-                    mat4.multiply(node.modelMatrix, rotationMatrix, node.modelMatrix);
                     
                     if (occlusionCullingEnabled) {
                         // use occlusion query with drawing bounding box
@@ -565,17 +567,17 @@
                                 if (samplesPassed == 0) {
                                     // console.log('invisible node ' + i);
                                     isVisible = false;
-                                    isDrawNodes[i] = false;
+                                    node.isDrawNode = false;
                                 }
                                 else {
                                     isVisible = true;
-                                    isDrawNodes[i] = true;
+                                    node.isDrawNode = true;
                                 }
                             } 
                             else {
                                 // query is not ready, use visible info from previous frame (to make assist cam looks correct)
                                 // if we want to be conservative, simple set isVisible to true
-                                isVisible = isDrawNodes[i];
+                                isVisible = node.isDrawNode;
                                 doquery = false;
                             }
                         }
@@ -629,9 +631,9 @@
                     gl.clearColor(0.3, 0.3, 0.3, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.useProgram(programAssistCam);
-                    for (i = 0, len = nodes.length; i < len; ++i) {
-                        if (isDrawNodes[i]) {
-                            node = nodes[i];
+                    for (i = 0; i < len; ++i) {
+                        node = nodes[i];
+                        if (node.isDrawNode) {
                             gl.bindVertexArray(node.vao);
                             gl.uniformMatrix4fv(modelMatrixLocationAssistCam, false, node.modelMatrix);
                             gl.drawElements(gl.TRIANGLES, node.indicesLength, gl.UNSIGNED_SHORT, 0);
