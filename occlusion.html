@@ -82,7 +82,7 @@
             vec4 worldPosition = uModel * position;
             vPosition = worldPosition.xyz;
             vUV = uv;
-            vNormal = (uModel * vec4(normal, 0.0)).xyz;
+            vNormal = mat3(uModel) * normal;
             gl_Position = uScene.viewProj * worldPosition;
         }
     </script>
@@ -550,7 +550,7 @@
 
                         // Check query results here (will be from previous frame or earlier)
                         if (sphere.queryInProgress && gl.getQueryParameter(sphere.query, gl.QUERY_RESULT_AVAILABLE)) {
-                            sphere.occluded = gl.getQueryParameter(sphere.query, gl.QUERY_RESULT) === 0;
+                            sphere.occluded = !gl.getQueryParameter(sphere.query, gl.QUERY_RESULT);
                             if (sphere.occluded) {
                                 occludedSpheres++;
                             }

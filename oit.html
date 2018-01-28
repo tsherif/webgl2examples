@@ -70,7 +70,7 @@
             vec4 worldPosition = modelMatrix * position;
             vPosition = worldPosition.xyz;
             vUV = uv;
-            vNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
+            vNormal = mat3(modelMatrix) * normal;
             vColor = color;
             gl_Position = uViewProj * worldPosition;
         }
