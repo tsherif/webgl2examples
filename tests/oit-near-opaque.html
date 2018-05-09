@@ -89,7 +89,7 @@
         // SET WEIGHT FUNCTION
         ////////////////////////
 
-        #define WEIGHT_FUNC TWITTER
+        #define WEIGHT_FUNC POLY_D
 
         layout(std140, column_major) uniform;
 
@@ -102,7 +102,7 @@
         layout(location=0) out vec4 accumColor;
         layout(location=1) out float accumAlpha;
         
-        float weight(float a) {            
+        float weight(float a) {  
             #if WEIGHT_FUNC == BLOG
                 return clamp(pow(min(1.0, a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
             #elif WEIGHT_FUNC == TWITTER   
@@ -123,7 +123,9 @@
                 float d2 = d * d;
                 float d4 = d2 * d2;
                 float d8 = d4 * d4;
-                return clamp((d + 10.0 * d2 + 100.0 * d4 + 10000.0 * d8), 0.01, 2e4);
+                float d16 = d8 * d8;
+                float depthWeight = d + 1e2 * d4 + 1e4 * d8 + 1e6 * d16;
+                return clamp(a * depthWeight, 0.01, 1e4);
             #endif
         }
 
@@ -182,7 +184,7 @@
         /////////////////////////
 
         var CAMERA_Z = 2;
-        var NEAR = 2.9;
+        var NEAR = 2.92;
         var FAR = 3;
         var Z_DELTA = 0.01;
 
