@@ -89,7 +89,7 @@
         // SET WEIGHT FUNCTION
         ////////////////////////
 
-        #define WEIGHT_FUNC POLY_D
+        #define WEIGHT_FUNC TWITTER
 
         layout(std140, column_major) uniform;
 
@@ -124,7 +124,7 @@
                 float d4 = d2 * d2;
                 float d8 = d4 * d4;
                 float d16 = d8 * d8;
-                float depthWeight = d + 1e2 * d4 + 1e4 * d8 + 1e6 * d16;
+                float depthWeight = d + 10.0 * d2 + 1e2 * d4 + 1e5 * d16;
                 return clamp(a * depthWeight, 0.01, 1e4);
             #endif
         }
