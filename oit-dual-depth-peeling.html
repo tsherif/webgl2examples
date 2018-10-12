@@ -28,7 +28,7 @@
 -->
 <html>
 <head>
-    <title>WebGL 2 Example: Order-independent Transparency by Dual Depth Peeling</title>
+    <title>WebGL 2 Example: Order-independent Transparency using Dual Depth Peeling</title>
     <meta charset="utf-8">
     <script src="utils/gl-matrix.js"></script>
     <script src="utils/utils.js"></script>
@@ -36,7 +36,7 @@
 </head>
 <body>
     <div id="example-title">
-        <header>WebGL 2 Example: Order-independent Transparency</header>
+        <header>WebGL 2 Example: Order-independent Transparency using Dual Depth Peeling</header>
         <div id="features">
             Features: Vertex Arrays, Uniform Buffers, Immutable Textures, Multiple Render Targets, Float Textures, texelFetch, Hardware Instancing, EXT_color_buffer_float
         </div>
@@ -239,7 +239,6 @@
             document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
         }
 
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.enable(gl.BLEND);
         gl.depthMask(false);
         gl.disable(gl.CULL_FACE);
@@ -417,7 +416,6 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
 
@@ -587,13 +585,17 @@
             var MAX_DEPTH = 1.0;
             var MIN_DEPTH = 0.0;
 
-            var NUM_PASS = 3;   // maximum rendered layer number = NUM_PASS * 2
+            var NUM_PASS = 4;   // maximum rendered layer number = NUM_PASS * 2
 
             function draw() {
 
                 //////////////////////////////////
                 // 1. Initialize min-max depth buffer
                 //////////////////////////////////
+
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
 
                 gl.bindFramebuffer(gl.FRAMEBUFFER, allBuffers[0]);
                 gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
@@ -619,8 +621,6 @@
                 gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[0]);
                 gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                 gl.blendEquation(gl.MAX);
-
-
 
                 gl.useProgram(dualDepthPeelingProgram);
                 gl.uniform1i(dualDepthPeelingLocations.depth, 3);
@@ -678,7 +678,6 @@
                     gl.bindVertexArray(sphereArray);
                     gl.drawElementsInstanced(gl.TRIANGLES, sphere.indices.length, gl.UNSIGNED_SHORT, 0, spheres.length);
                     
-
                     // blend back color separately
                     offsetBack = writeId * 3;
                     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
