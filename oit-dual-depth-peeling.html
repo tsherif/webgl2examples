@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<!--
+  The MIT License (MIT)
+
+  Copyright (c) 2017 Tarek Sherif, Shuai Shao
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<!-- 
+    Based on "Order Independent Transparency with Dual Depth Peeling"
+    By Louis Bavoil, Kevin Myers 
+    http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.193.3485&rep=rep1&type=pdf
+-->
+<html>
+<head>
+    <title>WebGL 2 Example: Order-independent Transparency by Dual Depth Peeling</title>
+    <meta charset="utf-8">
+    <script src="utils/gl-matrix.js"></script>
+    <script src="utils/utils.js"></script>
+    <link rel="stylesheet" href="css/webgl2examples.css">
+</head>
+<body>
+    <div id="example-title">
+        <header>WebGL 2 Example: Order-independent Transparency</header>
+        <div id="features">
+            Features: Vertex Arrays, Uniform Buffers, Immutable Textures, Multiple Render Targets, Float Textures, texelFetch, Hardware Instancing, EXT_color_buffer_float
+        </div>
+        <div>
+            <a href="https://github.com/tsherif/webgl2examples/blob/master/oit.html">Source code</a>
+        </div>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+    <script type="x-shader/vs" id="vertex-peeling">
+        #version 300 es
+
+        layout(std140, column_major) uniform;
+        
+        layout(location=0) in vec4 position;
+        layout(location=1) in vec2 uv;
+        layout(location=2) in vec3 normal;
+        layout(location=3) in vec4 color;
+        layout(location=4) in mat4 modelMatrix;
+        
+        uniform SceneUniforms {
+            mat4 uViewProj;
+            vec4 uEyePosition;
+            vec4 uLightPosition;
+        };       
+        
+        out vec3 vPosition;
+        out vec2 vUV;
+        out vec3 vNormal;
+        flat out vec4 vColor;
+
+        void main() {
+            vec4 worldPosition = modelMatrix * position;
+            vPosition = worldPosition.xyz;
+            vUV = uv;
+            vNormal = mat3(modelMatrix) * normal;
+            vColor = color;
+            gl_Position = uViewProj * worldPosition;
+        }
+    </script>
+    <script type="x-shader/fs" id="fragment-peeling">
+        #version 300 es
+        precision highp float;
+        precision highp sampler2D;
+
+        #define MAX_DEPTH 99999.0
+
+        layout(std140, column_major) uniform;
+
+        uniform SceneUniforms {
+            mat4 uViewProj;
+            vec4 uEyePosition;
+            vec4 uLightPosition;
+        };
+
+        uniform sampler2D uTexture;
+        uniform sampler2D uDepth;
+        uniform sampler2D uFrontColor;
+        
+        in vec3 vPosition;
+        in vec2 vUV;
+        in vec3 vNormal;
+        flat in vec4 vColor;
+
+        layout(location=0) out vec4 depth;  // RG32F, R - negative front depth, G - back depth
+        layout(location=1) out vec4 frontColor;
+        layout(location=2) out vec4 backColor;
+
+        void main() {
+
+            // -------------------------
+            // dual depth peeling
+            // -------------------------
+
+            float fragDepth = gl_FragCoord.z;   // 0 - 1
+
+            ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+            vec2 lastDepth = texelFetch(uDepth, fragCoord, 0).rg;
+            vec4 lastFrontColor = texelFetch(uFrontColor, fragCoord, 0);
+
+            // depth value always increases
+            // so we can use MAX blender equation
+            depth.rg = vec2(-MAX_DEPTH);
+
+            // front color always increases
+            // so we can use MAX blender equation
+            frontColor = lastFrontColor;
+
+            // back color is separatly blend afterwards each pass
+            backColor = vec4(0.f);
+
+            float nearestDepth = - lastDepth.x;
+            float furthestDepth = lastDepth.y;
+            float alphaMultiplier = 1.f - lastFrontColor.a;
+
+
+            if (fragDepth < nearestDepth || fragDepth > furthestDepth)
+            {
+                // Skip this depth since it's been peeled.
+                return;
+            }
+
+            if (fragDepth > nearestDepth && fragDepth < furthestDepth)
+            {
+                // This needs to be peeled.
+                // the one remains after MAX blended for all need-to-peel will be peeled next pass
+                depth.rg = vec2(-fragDepth, fragDepth);
+                return;
+            }
+
+            // If it reaches here, it is the layer we need to render for this pass
+
+
+            // -------------------------
+
+
+            vec3 position = vPosition.xyz;
+            vec3 normal = normalize(vNormal.xyz);
+            vec2 uv = vUV;
+
+            vec4 baseColor = vColor * texture(uTexture, uv);
+            vec3 eyeDirection = normalize(uEyePosition.xyz - position);
+            vec3 lightVec = uLightPosition.xyz - position;
+            vec3 lightDirection = normalize(lightVec);
+            vec3 reflectionDirection = reflect(-lightDirection, normal);
+            float nDotL = max(dot(lightDirection, normal), 0.0);
+            float diffuse = nDotL;
+            float ambient = 0.2;
+            float specular = pow(max(dot(reflectionDirection, eyeDirection), 0.0), 20.0);
+
+            vec4 color = vec4((ambient + diffuse + specular) * baseColor.rgb, vColor.a);
+            // color.rgb *= color.a;
+
+            // dual depth peeling
+            // write to back and front color buffer
+
+            if (fragDepth == nearestDepth)
+            {
+                frontColor.rgb += color.rgb * color.a * alphaMultiplier;
+                frontColor.a = 1.f - alphaMultiplier * (1.f - color.a);
+            }
+            else
+            {
+                backColor += color;
+            }
+        }
+    </script>
+    <script type="x-shader/vs" id="vertex-quad">
+        #version 300 es
+
+        layout(location=0) in vec4 aPosition;
+        
+        void main() {
+            gl_Position = aPosition;
+        }
+    </script>
+
+    <script type="x-shader/fs" id="fragment-blend-back">
+        #version 300 es
+        precision highp float;
+
+        uniform sampler2D uBackColor;
+        
+        out vec4 fragColor;
+        void main() {
+            fragColor = texelFetch(uBackColor, ivec2(gl_FragCoord.xy), 0);
+            if (fragColor.a == 0.f) discard;
+        }
+    </script>
+
+    <script type="x-shader/fs" id="fragment-final">
+        #version 300 es
+        precision highp float;
+
+        uniform sampler2D uFrontColor;
+        uniform sampler2D uBackColor;
+        
+        out vec4 fragColor;
+        void main() {
+            ivec2 fragCoord = ivec2(gl_FragCoord.xy);
+            vec4 frontColor = texelFetch(uFrontColor, fragCoord, 0);
+            vec4 backColor = texelFetch(uBackColor, fragCoord, 0);
+            float alphaMultiplier = 1.f - frontColor.a;
+
+            fragColor = vec4(
+                frontColor.rgb + alphaMultiplier * backColor.rgb,
+                frontColor.a + backColor.a
+            );
+        }
+    </script>
+    
+    <script>
+        var canvas = document.getElementById("gl-canvas");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        var gl = canvas.getContext("webgl2");
+
+        if (!gl) {
+            console.error("WebGL 2 not available");
+            document.body.innerHTML = "This example requires WebGL 2 which is unavailable on this system."
+        }
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.BLEND);
+        gl.depthMask(false);
+        gl.disable(gl.CULL_FACE);
+
+        if (!gl.getExtension("EXT_color_buffer_float")) {
+            console.error("FLOAT color buffer not available");
+            document.body.innerHTML = "This example requires EXT_color_buffer_float which is unavailable on this system."
+        }
+
+        /////////////////////////
+        // OBJECT DESCRIPTIONS
+        /////////////////////////
+
+        var NUM_SPHERES = 32;
+        var NUM_PER_ROW = 8;
+        var RADIUS = 0.6;
+        var spheres = new Array(NUM_SPHERES);
+
+        var colorData = new Float32Array(NUM_SPHERES * 4);
+        var modelMatrixData = new Float32Array(NUM_SPHERES * 16);
+
+        for (var i = 0; i < NUM_SPHERES; ++i) {
+            var angle = 2 * Math.PI * (i % NUM_PER_ROW) / NUM_PER_ROW;
+            var x = Math.sin(angle) * RADIUS;
+            var y = Math.floor(i / NUM_PER_ROW) / (NUM_PER_ROW / 4) - 0.75;
+            var z = Math.cos(angle) * RADIUS;
+            spheres[i] = {
+                scale: [0.8, 0.8, 0.8],
+                rotate: [0, 0, 0], // Will be used for global rotation
+                translate: [x, y, z],
+                modelMatrix: mat4.create()
+            };
+
+            colorData.set(vec4.fromValues(
+                Math.sqrt(Math.random()),
+                Math.sqrt(Math.random()),
+                Math.sqrt(Math.random()),
+                0.5
+            ), i * 4);
+        }
+
+        ///////////////////////////////
+        // DUAL DEPTH PEELING PROGRAM
+        //////////////////////////////
+
+        var dualDepthPeelingVsSource =  document.getElementById("vertex-peeling").text.trim();
+        var dualDepthPeelingFsSource =  document.getElementById("fragment-peeling").text.trim();
+        
+        var dualDepthPeelingVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(dualDepthPeelingVertexShader, dualDepthPeelingVsSource);
+        gl.compileShader(dualDepthPeelingVertexShader);
+
+        if (!gl.getShaderParameter(dualDepthPeelingVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(dualDepthPeelingVertexShader));
+        }
+
+        var dualDepthPeelingFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(dualDepthPeelingFragmentShader, dualDepthPeelingFsSource);
+        gl.compileShader(dualDepthPeelingFragmentShader);
+
+        if (!gl.getShaderParameter(dualDepthPeelingFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(dualDepthPeelingFragmentShader));
+        }
+
+        var dualDepthPeelingProgram = gl.createProgram();
+        gl.attachShader(dualDepthPeelingProgram, dualDepthPeelingVertexShader);
+        gl.attachShader(dualDepthPeelingProgram, dualDepthPeelingFragmentShader);
+        gl.linkProgram(dualDepthPeelingProgram);
+
+        if (!gl.getProgramParameter(dualDepthPeelingProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(dualDepthPeelingProgram));
+        }
+
+        ////////////////////////////
+        // FULL SCREEN QUAD PROGRAMS
+        ////////////////////////////
+
+        var quadVsSource =  document.getElementById("vertex-quad").text.trim();
+
+        var fullScreenQuadVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(fullScreenQuadVertexShader, quadVsSource);
+        gl.compileShader(fullScreenQuadVertexShader);
+
+        if (!gl.getShaderParameter(fullScreenQuadVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(fullScreenQuadVertexShader));
+        }
+
+        var finalFsSource = document.getElementById("fragment-final").text.trim();
+        var blendBackFsSource = document.getElementById("fragment-blend-back").text.trim();
+
+        var finalFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(finalFragmentShader, finalFsSource);
+        gl.compileShader(finalFragmentShader);
+
+        if (!gl.getShaderParameter(finalFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(finalFragmentShader));
+        }
+
+        var blendBackFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(blendBackFragmentShader, blendBackFsSource);
+        gl.compileShader(blendBackFragmentShader);
+
+        if (!gl.getShaderParameter(blendBackFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(blendBackFragmentShader));
+        }
+
+        var finalProgram = gl.createProgram();
+        gl.attachShader(finalProgram, fullScreenQuadVertexShader);
+        gl.attachShader(finalProgram, finalFragmentShader);
+        gl.linkProgram(finalProgram);
+
+        if (!gl.getProgramParameter(finalProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(finalProgram));
+        }
+
+        var blendBackProgram = gl.createProgram();
+        gl.attachShader(blendBackProgram, fullScreenQuadVertexShader);
+        gl.attachShader(blendBackProgram, blendBackFragmentShader);
+        gl.linkProgram(blendBackProgram);
+
+        if (!gl.getProgramParameter(blendBackProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(blendBackProgram));
+        }
+
+        /////////////////////////
+        // GET UNIFORM LOCATIONS
+        /////////////////////////
+
+        var sceneUniformsLocation = gl.getUniformBlockIndex(dualDepthPeelingProgram, "SceneUniforms");
+        gl.uniformBlockBinding(dualDepthPeelingProgram, sceneUniformsLocation, 0);
+
+        var dualDepthPeelingLocations = {
+            texture: gl.getUniformLocation(dualDepthPeelingProgram, "uTexture"),
+            model: gl.getUniformLocation(dualDepthPeelingProgram, "uModel"),
+            depth: gl.getUniformLocation(dualDepthPeelingProgram, "uDepth"),
+            frontColor: gl.getUniformLocation(dualDepthPeelingProgram, "uFrontColor")
+        };
+
+        var finalLocations = {
+            frontColor: gl.getUniformLocation(finalProgram, "uFrontColor"),
+            backColor: gl.getUniformLocation(finalProgram, "uBackColor")
+        };
+
+        var blendBackLocations = {
+            backColor:gl.getUniformLocation(blendBackProgram, "uBackColor")
+        };
+
+        ////////////////////////////////
+        //  SET UP FRAMEBUFFERS
+        ////////////////////////////////
+
+        
+        var allBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];  // 2 for ping-pong
+        var colorBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];  // 2 for ping-pong
+        var blendBackBuffer = gl.createFramebuffer();
+
+        for (let i = 0; i < 2; i++) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, allBuffers[i]);
+            let o = i * 3;
+
+            let depthTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0 + o);
+            gl.bindTexture(gl.TEXTURE_2D, depthTarget);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RG, gl.FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
+            
+            let frontColorTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE1 + o);
+            gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
+
+            let backColorTarget = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE2 + o);
+            gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, backColorTarget, 0);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, colorBuffers[i]);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, frontColorTarget, 0);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, backColorTarget, 0);
+        }
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blendBackBuffer);
+
+        var blendBackTarget = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE6);
+        gl.bindTexture(gl.TEXTURE_2D, blendBackTarget);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blendBackTarget, 0);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        /////////////////////
+        // SET UP GEOMETRY
+        /////////////////////
+
+        var sphere = utils.createSphere({radius: 0.5});
+        var numVertices = sphere.positions.length / 3;
+
+        var sphereArray = gl.createVertexArray();
+        gl.bindVertexArray(sphereArray);
+
+        var positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.positions, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        var uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.uvs, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(1);
+
+        var normalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, sphere.normals, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(2);
+
+
+        var color = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color);
+        gl.bufferData(gl.ARRAY_BUFFER, colorData, gl.STATIC_DRAW);
+        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribDivisor(3, 1);
+        gl.enableVertexAttribArray(3);
+
+        // Columns of matrix as separate attributes for instancing
+        var matrixBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, modelMatrixData, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 64, 0);
+        gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 64, 16);
+        gl.vertexAttribPointer(6, 4, gl.FLOAT, false, 64, 32);
+        gl.vertexAttribPointer(7, 4, gl.FLOAT, false, 64, 48);
+
+        gl.vertexAttribDivisor(4, 1);
+        gl.vertexAttribDivisor(5, 1);
+        gl.vertexAttribDivisor(6, 1);
+        gl.vertexAttribDivisor(7, 1);
+
+        gl.enableVertexAttribArray(4);
+        gl.enableVertexAttribArray(5);
+        gl.enableVertexAttribArray(6);
+        gl.enableVertexAttribArray(7);
+
+        var indices = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sphere.indices, gl.STATIC_DRAW);
+
+        // Quad for draw pass
+        var quadArray = gl.createVertexArray();
+        gl.bindVertexArray(quadArray);
+
+        var quadPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, 1,
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ]), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(0);
+
+        //////////////////////
+        // SET UP UNIFORMS
+        //////////////////////
+
+        var projMatrix = mat4.create();
+        mat4.perspective(projMatrix, Math.PI / 2, canvas.width / canvas.height, 0.1, 10.0);
+
+        var viewMatrix = mat4.create();
+        var eyePosition = vec3.fromValues(0, 0.8, 2);
+        mat4.lookAt(viewMatrix, eyePosition, vec3.fromValues(0, 0, 0), vec3.fromValues(0, 1, 0));
+
+        var viewProjMatrix = mat4.create();
+        mat4.multiply(viewProjMatrix, projMatrix, viewMatrix);
+
+        var lightPosition = vec3.fromValues(1, 1, 2);
+        
+        var sceneUniformData = new Float32Array(24);
+        sceneUniformData.set(viewProjMatrix);
+        sceneUniformData.set(eyePosition, 16);
+        sceneUniformData.set(lightPosition, 20);
+
+        var sceneUniformBuffer = gl.createBuffer();
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, sceneUniformBuffer);
+        gl.bufferData(gl.UNIFORM_BUFFER, sceneUniformData, gl.STATIC_DRAW);
+
+        var image = new Image();
+
+        image.onload = function() {
+
+            ///////////////////////
+            // BIND TEXTURES
+            ///////////////////////
+
+            var texture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE9);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            
+            var levels = levels = Math.floor(Math.log2(Math.max(this.width, this.height))) + 1;
+            gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, image.width, image.height);
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, image.width, image.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            gl.useProgram(finalProgram);
+            gl.uniform1i(finalLocations.backColor, 6);
+
+            gl.useProgram(dualDepthPeelingProgram);
+            gl.uniform1i(dualDepthPeelingLocations.texture, 9);
+            
+
+            var rotationMatrix = mat4.create();
+
+
+            var DEPTH_CLEAR_VALUE = -99999.0;
+            var MAX_DEPTH = 1.0;
+            var MIN_DEPTH = 0.0;
+
+            var NUM_PASS = 3;   // maximum rendered layer number = NUM_PASS * 2
+
+            function draw() {
+
+                //////////////////////////////////
+                // 1. Initialize min-max depth buffer
+                //////////////////////////////////
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, allBuffers[0]);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[1]);
+                // gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[0]);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[1]);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                 // draw depth for first pass
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[0]);
+                gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                gl.blendEquation(gl.MAX);
+
+
+
+                gl.useProgram(dualDepthPeelingProgram);
+                gl.uniform1i(dualDepthPeelingLocations.depth, 3);
+                gl.uniform1i(dualDepthPeelingLocations.frontColor, 4);
+                gl.bindVertexArray(sphereArray);
+
+                for (var i = 0, len = spheres.length; i < len; ++i) {
+                    spheres[i].rotate[1] += 0.002;
+
+                    utils.xformMatrix(spheres[i].modelMatrix, spheres[i].translate, null, spheres[i].scale);
+                    mat4.fromYRotation(rotationMatrix, spheres[i].rotate[1]);
+                    mat4.multiply(spheres[i].modelMatrix, rotationMatrix, spheres[i].modelMatrix);
+                
+                    modelMatrixData.set(spheres[i].modelMatrix, i * 16);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, matrixBuffer);
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, modelMatrixData);
+                
+                gl.drawElementsInstanced(gl.TRIANGLES, sphere.indices.length, gl.UNSIGNED_SHORT, 0, spheres.length);
+
+
+                ////////////////////////////////////
+                // 2. Dual Depth Peeling Ping-Pong
+                ////////////////////////////////////
+                let readId, writeId;
+                let offsetRead, offsetBack;
+
+                for (let pass = 0; pass < NUM_PASS; pass++) {
+                    readId = pass % 2;
+                    writeId = 1 - readId;  // ping-pong: 0 or 1
+                    
+
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[writeId]);
+                    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                    gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, colorBuffers[writeId]);
+                    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+                    gl.clearColor(0, 0, 0, 0);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[writeId]);
+                    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+                    gl.blendEquation(gl.MAX);
+
+                    // update texture uniform
+                    offsetRead = readId * 3;
+                    gl.useProgram(dualDepthPeelingProgram);
+                    gl.uniform1i(dualDepthPeelingLocations.depth, offsetRead);
+                    gl.uniform1i(dualDepthPeelingLocations.frontColor, offsetRead + 1);
+
+                    // draw geometry
+                    gl.bindVertexArray(sphereArray);
+                    gl.drawElementsInstanced(gl.TRIANGLES, sphere.indices.length, gl.UNSIGNED_SHORT, 0, spheres.length);
+                    
+
+                    // blend back color separately
+                    offsetBack = writeId * 3;
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, blendBackBuffer);
+                    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+                    gl.blendEquation(gl.FUNC_ADD);
+                    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                    gl.useProgram(blendBackProgram);
+                    gl.uniform1i(blendBackLocations.backColor, offsetBack + 2);
+                    gl.bindVertexArray(quadArray);
+                    gl.drawArrays(gl.TRIANGLES, 0, 6);
+                }
+
+                
+
+                //////////////////////////
+                // 3. Final
+                //////////////////////////
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.drawBuffers([gl.BACK]);
+                gl.clearColor(0, 0, 0, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                gl.useProgram(finalProgram);
+                gl.uniform1i(finalLocations.frontColor, offsetBack + 1);
+
+                gl.bindVertexArray(quadArray);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);                
+
+                requestAnimationFrame(draw);
+            }
+
+            requestAnimationFrame(draw);
+            
+        }
+
+        image.src = "img/khronos_webgl.png";
+
+    </script>
+    <a href="https://github.com/tsherif/webgl2examples" id="github-ribbon"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+</body>
+</html>
