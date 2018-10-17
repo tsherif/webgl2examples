@@ -100,7 +100,7 @@
         in vec3 vNormal;
         flat in vec4 vColor;
 
-        layout(location=0) out vec4 depth;  // RG32F, R - negative front depth, G - back depth
+        layout(location=0) out vec2 depth;  // RG32F, R - negative front depth, G - back depth
         layout(location=1) out vec4 frontColor;
         layout(location=2) out vec4 backColor;
 
@@ -117,14 +117,14 @@
             vec4 lastFrontColor = texelFetch(uFrontColor, fragCoord, 0);
 
             // depth value always increases
-            // so we can use MAX blender equation
+            // so we can use MAX blend equation
             depth.rg = vec2(-MAX_DEPTH);
 
             // front color always increases
-            // so we can use MAX blender equation
+            // so we can use MAX blend equation
             frontColor = lastFrontColor;
 
-            // back color is separatly blend afterwards each pass
+            // back color is separately blend afterwards each pass
             backColor = vec4(0.0);
 
             float nearestDepth = - lastDepth.x;
@@ -139,16 +139,16 @@
 
             if (fragDepth > nearestDepth && fragDepth < furthestDepth) {
                 // This needs to be peeled.
-                // the one remains after MAX blended for all need-to-peel will be peeled next pass
+                // The ones remaining after MAX blended for 
+                // all need-to-peel will be peeled next pass.
                 depth.rg = vec2(-fragDepth, fragDepth);
                 return;
             }
 
+
+            // -------------------------------------------------------------------
             // If it reaches here, it is the layer we need to render for this pass
-
-
-            // -------------------------
-
+            // -------------------------------------------------------------------
 
             vec3 position = vPosition.xyz;
             vec3 normal = normalize(vNormal.xyz);
@@ -280,32 +280,32 @@
         // DUAL DEPTH PEELING PROGRAM
         //////////////////////////////
 
-        var dualDepthPeelingVsSource =  document.getElementById("vertex-peeling").text.trim();
-        var dualDepthPeelingFsSource =  document.getElementById("fragment-peeling").text.trim();
+        var depthPeelVsSource =  document.getElementById("vertex-peeling").text.trim();
+        var depthPeelFsSource =  document.getElementById("fragment-peeling").text.trim();
         
-        var dualDepthPeelingVertexShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(dualDepthPeelingVertexShader, dualDepthPeelingVsSource);
-        gl.compileShader(dualDepthPeelingVertexShader);
+        var depthPeelVertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(depthPeelVertexShader, depthPeelVsSource);
+        gl.compileShader(depthPeelVertexShader);
 
-        if (!gl.getShaderParameter(dualDepthPeelingVertexShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(dualDepthPeelingVertexShader));
+        if (!gl.getShaderParameter(depthPeelVertexShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(depthPeelVertexShader));
         }
 
-        var dualDepthPeelingFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(dualDepthPeelingFragmentShader, dualDepthPeelingFsSource);
-        gl.compileShader(dualDepthPeelingFragmentShader);
+        var depthPeelFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(depthPeelFragmentShader, depthPeelFsSource);
+        gl.compileShader(depthPeelFragmentShader);
 
-        if (!gl.getShaderParameter(dualDepthPeelingFragmentShader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(dualDepthPeelingFragmentShader));
+        if (!gl.getShaderParameter(depthPeelFragmentShader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(depthPeelFragmentShader));
         }
 
-        var dualDepthPeelingProgram = gl.createProgram();
-        gl.attachShader(dualDepthPeelingProgram, dualDepthPeelingVertexShader);
-        gl.attachShader(dualDepthPeelingProgram, dualDepthPeelingFragmentShader);
-        gl.linkProgram(dualDepthPeelingProgram);
+        var depthPeelProgram = gl.createProgram();
+        gl.attachShader(depthPeelProgram, depthPeelVertexShader);
+        gl.attachShader(depthPeelProgram, depthPeelFragmentShader);
+        gl.linkProgram(depthPeelProgram);
 
-        if (!gl.getProgramParameter(dualDepthPeelingProgram, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(dualDepthPeelingProgram));
+        if (!gl.getProgramParameter(depthPeelProgram, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(depthPeelProgram));
         }
 
         ////////////////////////////
@@ -363,13 +363,13 @@
         // GET UNIFORM LOCATIONS
         /////////////////////////
 
-        var sceneUniformsLocation = gl.getUniformBlockIndex(dualDepthPeelingProgram, "SceneUniforms");
-        gl.uniformBlockBinding(dualDepthPeelingProgram, sceneUniformsLocation, 0);
+        var sceneUniformsLocation = gl.getUniformBlockIndex(depthPeelProgram, "SceneUniforms");
+        gl.uniformBlockBinding(depthPeelProgram, sceneUniformsLocation, 0);
 
-        var dualDepthPeelingTextureLocation = gl.getUniformLocation(dualDepthPeelingProgram, "uTexture");
-        var dualDepthPeelingModelLocation = gl.getUniformLocation(dualDepthPeelingProgram, "uModel");
-        var dualDepthPeelingDepthLocation = gl.getUniformLocation(dualDepthPeelingProgram, "uDepth");
-        var dualDepthPeelingFrontColorLocation = gl.getUniformLocation(dualDepthPeelingProgram, "uFrontColor");
+        var depthPeelTextureLocation = gl.getUniformLocation(depthPeelProgram, "uTexture");
+        var depthPeelModelLocation = gl.getUniformLocation(depthPeelProgram, "uModel");
+        var depthPeelDepthLocation = gl.getUniformLocation(depthPeelProgram, "uDepth");
+        var depthPeelFrontColorLocation = gl.getUniformLocation(depthPeelProgram, "uFrontColor");
 
         var finalFrontColorLocation = gl.getUniformLocation(finalProgram, "uFrontColor");
         var finalBackColorLocation = gl.getUniformLocation(finalProgram, "uBackColor");
@@ -384,18 +384,20 @@
         // COLOR_ATTACHMENT0 - depth
         // COLOR_ATTACHMENT1 - front color
         // COLOR_ATTACHMENT2 - back color
-        var allBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+        var depthPeelBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+        
         // 2 for ping-pong
         // COLOR_ATTACHMENT0 - front color
         // COLOR_ATTACHMENT1 - back color
         var colorBuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+        
         var blendBackBuffer = gl.createFramebuffer();
 
-        for (let i = 0; i < 2; i++) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, allBuffers[i]);
-            let o = i * 3;
+        for (var i = 0; i < 2; i++) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, depthPeelBuffers[i]);
+            var o = i * 3;
 
-            let depthTarget = gl.createTexture();
+            var depthTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE0 + o);
             gl.bindTexture(gl.TEXTURE_2D, depthTarget);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -405,7 +407,7 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RG, gl.FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthTarget, 0);
             
-            let frontColorTarget = gl.createTexture();
+            var frontColorTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE1 + o);
             gl.bindTexture(gl.TEXTURE_2D, frontColorTarget);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -415,7 +417,7 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.HALF_FLOAT, null);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, frontColorTarget, 0);
 
-            let backColorTarget = gl.createTexture();
+            var backColorTarget = gl.createTexture();
             gl.activeTexture(gl.TEXTURE2 + o);
             gl.bindTexture(gl.TEXTURE_2D, backColorTarget);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -568,8 +570,8 @@
 
             gl.useProgram(finalProgram);
             gl.uniform1i(finalBackColorLocation, 6);
-            gl.useProgram(dualDepthPeelingProgram);
-            gl.uniform1i(dualDepthPeelingTextureLocation, 9);
+            gl.useProgram(depthPeelProgram);
+            gl.uniform1i(depthPeelTextureLocation, 9);
 
             var rotationMatrix = mat4.create();
 
@@ -589,12 +591,12 @@
                 gl.clearColor(0, 0, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
-                gl.bindFramebuffer(gl.FRAMEBUFFER, allBuffers[0]);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, depthPeelBuffers[0]);
                 gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                 gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
-                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[1]);
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[1]);
                 gl.clearColor(-MIN_DEPTH, MAX_DEPTH, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -608,13 +610,13 @@
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
                 // draw depth for first pass to peel
-                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[0]);
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[0]);
                 gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                 gl.blendEquation(gl.MAX);
 
-                gl.useProgram(dualDepthPeelingProgram);
-                gl.uniform1i(dualDepthPeelingDepthLocation, 3);
-                gl.uniform1i(dualDepthPeelingFrontColorLocation, 4);
+                gl.useProgram(depthPeelProgram);
+                gl.uniform1i(depthPeelDepthLocation, 3);
+                gl.uniform1i(depthPeelFrontColorLocation, 4);
                 gl.bindVertexArray(sphereArray);
 
                 for (var i = 0, len = spheres.length; i < len; ++i) {
@@ -635,14 +637,15 @@
                 ////////////////////////////////////
                 // 2. Dual Depth Peeling Ping-Pong
                 ////////////////////////////////////
-                let readId, writeId;
-                let offsetRead, offsetBack;
+                
+                var readId, writeId;
+                var offsetRead, offsetBack;
 
-                for (let pass = 0; pass < NUM_PASS; pass++) {
+                for (var pass = 0; pass < NUM_PASS; pass++) {
                     readId = pass % 2;
                     writeId = 1 - readId;  // ping-pong: 0 or 1
                     
-                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[writeId]);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
                     gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
                     gl.clearColor(DEPTH_CLEAR_VALUE, DEPTH_CLEAR_VALUE, 0, 0);
                     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -652,15 +655,15 @@
                     gl.clearColor(0, 0, 0, 0);
                     gl.clear(gl.COLOR_BUFFER_BIT);
 
-                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, allBuffers[writeId]);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, depthPeelBuffers[writeId]);
                     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
                     gl.blendEquation(gl.MAX);
 
                     // update texture uniform
                     offsetRead = readId * 3;
-                    gl.useProgram(dualDepthPeelingProgram);
-                    gl.uniform1i(dualDepthPeelingDepthLocation, offsetRead);
-                    gl.uniform1i(dualDepthPeelingFrontColorLocation, offsetRead + 1);
+                    gl.useProgram(depthPeelProgram);
+                    gl.uniform1i(depthPeelDepthLocation, offsetRead);
+                    gl.uniform1i(depthPeelFrontColorLocation, offsetRead + 1);
 
                     // draw geometry
                     gl.bindVertexArray(sphereArray);

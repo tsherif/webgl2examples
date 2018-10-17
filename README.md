@@ -9,7 +9,7 @@ Currently include:
 - [Particles](https://tsherif.github.io/webgl2examples/particles.html) (vertex arrays, uniform buffers, transform feedback)
 - [Deferred Rendering](https://tsherif.github.io/webgl2examples/deferred.html) (vertex arrays, uniform buffers, immutable textures, multiple render targets, float textures, texelFetch, EXT_color_buffer_float)
 - [Depth of Field](https://tsherif.github.io/webgl2examples/dof.html) (vertex arrays, uniform buffers, immutable textures, depth textures, texelFetch, hardware instancing)
-- [Order-independent Transparency](https://tsherif.github.io/webgl2examples/oit.html) (vertex arrays, uniform buffers, immutable textures, multiple render targets, float textures, texelFetch, hardware instancing, EXT_color_buffer_float)
+- [Weighted, Blended Order-independent Transparency](https://tsherif.github.io/webgl2examples/oit.html) (vertex arrays, uniform buffers, immutable textures, multiple render targets, float textures, texelFetch, hardware instancing, EXT_color_buffer_float)
 - [Order-independent Transparency using Dual Depth Peeling](https://tsherif.github.io/webgl2examples/oit-dual-depth-peeling.html) (vertex arrays, uniform buffers, immutable textures, multiple render targets, float textures, texelFetch, hardware instancing, EXT_color_buffer_float)
 - [Screen Space Ambient Occlusion](https://tsherif.github.io/webgl2examples/ssao.html) (vertex arrays, uniform buffers, immutable textures, multiple render targets, float textures, texelFetch, hardware instancing, EXT_color_buffer_float)
 - [Occlusion Culling](https://tsherif.github.io/webgl2examples/occlusion.html) (vertex arrays, uniform buffers, immutable textures, occlusion query)
